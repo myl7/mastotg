@@ -9,7 +9,7 @@ use rss::{Channel, Item};
 use crate::post::Post;
 
 pub trait Producer {
-    fn fetch_posts(&self) -> anyhow::Result<(Option<String>, Vec<Post>)>;
+    fn fetch_posts(&self) -> anyhow::Result<(String, Vec<Post>)>;
 }
 
 pub struct MastodonProducer {
@@ -23,7 +23,7 @@ impl MastodonProducer {
 }
 
 impl Producer for MastodonProducer {
-    fn fetch_posts(&self) -> anyhow::Result<(Option<String>, Vec<Post>)> {
+    fn fetch_posts(&self) -> anyhow::Result<(String, Vec<Post>)> {
         let res = reqwest::blocking::get(&self.rss_url)?;
         if !res.status().is_success() {
             return Err(anyhow::anyhow!(
@@ -34,12 +34,13 @@ impl Producer for MastodonProducer {
         }
         let body = res.text()?;
         let chan = Channel::from_str(&body)?;
-        let last_build_date = chan.last_build_date().map(|s| {
-            DateTime::parse_from_rfc2822(s)
-                .unwrap()
-                .with_timezone(&Utc)
-                .to_rfc3339()
-        });
+        let last_build_date = DateTime::parse_from_rfc2822(
+            chan.last_build_date()
+                .ok_or(anyhow::anyhow!("No last build date in the channel"))?,
+        )
+        .unwrap()
+        .with_timezone(&Utc)
+        .to_rfc3339();
         let items = chan
             .items()
             .iter()
@@ -53,7 +54,6 @@ impl TryFrom<&Item> for Post {
     type Error = anyhow::Error;
 
     fn try_from(item: &Item) -> Result<Self, Self::Error> {
-        // TODO: Download media
         Ok(Self {
             id: item
                 .guid()

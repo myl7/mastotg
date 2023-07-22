@@ -6,6 +6,7 @@ use std::io::Read;
 use std::path::PathBuf;
 use std::{env, io};
 
+#[derive(Debug)]
 pub struct Post {
     /// GUID
     pub id: String,
@@ -17,13 +18,14 @@ pub struct Post {
     pub link: Option<String>,
 }
 
+#[derive(Debug)]
 pub enum Media {
     Photos(Vec<Fid>),
     Video(Fid),
     Audio(Fid),
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Fid {
     pub value: String,
 }
