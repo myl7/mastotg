@@ -12,7 +12,7 @@ pub struct Post {
     /// Content text
     pub body: String,
     /// Media attachments
-    pub media: Media,
+    pub media: Option<Media>,
     /// Original URL
     pub link: Option<String>,
 }

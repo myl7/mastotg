@@ -19,3 +19,7 @@ keywords = [
 
 [dependencies]
 anyhow = "1.0.71"
+reqwest = { version = "0.11.18", features = ["blocking"] }
+rss = "2.0.4"
+chrono = "0.4.26"
+clap = { version = "4.3.19", features = ["derive", "env"] }
