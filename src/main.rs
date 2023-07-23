@@ -1,8 +1,8 @@
 // Copyright (C) myl7
 // SPDX-License-Identifier: Apache-2.0
 
-use std::thread;
 use std::time::Duration;
+use std::{fs, io, thread};
 
 use clap::Parser;
 use rusqlite::Connection;
@@ -11,7 +11,7 @@ mod db;
 mod post;
 mod producer;
 
-use post::FsRepo;
+use post::{FsRepo, Media, Post, Repo};
 use producer::{MastodonProducer, Producer};
 
 fn main() -> anyhow::Result<()> {
@@ -35,7 +35,14 @@ fn run(cli: &Cli, conn: &Connection) -> anyhow::Result<()> {
     let producer = MastodonProducer::new(cli.rss_url.clone());
     let (last_build_date, posts) = producer.fetch_posts()?;
     let posts = db::dedup_posts(conn, &last_build_date, posts)?;
-    let repo = FsRepo::new(cli.media_dir.clone().into());
+    fs::create_dir(&cli.media_dir).or_else(|e| match e.kind() {
+        io::ErrorKind::AlreadyExists => Ok(()),
+        _ => Err(e),
+    })?;
+    let mut repo = FsRepo::new(cli.media_dir.clone().into());
+    posts
+        .iter()
+        .try_for_each(|post| download_media(post, &mut repo))?;
 
     // TODO: Send the posts
     println!("last_build_date: {}", last_build_date);
@@ -58,7 +65,7 @@ struct Cli {
     #[clap(long, default_value = "mastotg.sqlite")]
     db_path: String,
     /// Dir to store media files
-    #[clap(long, default_value = "mastotg/media")]
+    #[clap(long, default_value = "media")]
     media_dir: String,
     /// Keep media files after sending
     // With this we will use the `media` table in the database.
@@ -81,6 +88,7 @@ CREATE TABLE IF NOT EXISTS posts (
 CREATE TABLE IF NOT EXISTS media (
     fid TEXT PRIMARY KEY,
     type TEXT NOT NULL,
+    link TEXT NOT NULL,
     post_id TEXT NOT NULL,
     FOREIGN KEY(post_id) REFERENCES posts(id)
 );
@@ -88,3 +96,42 @@ CREATE TABLE IF NOT EXISTS last_build_dates (
     value TEXT PRIMARY KEY
 );
 "#;
+
+fn download_media(post: &Post, repo: &mut impl Repo) -> anyhow::Result<()> {
+    if let Some(media) = post.media.as_ref() {
+        match media {
+            Media::Photos(fids) => Ok(fids.iter().try_for_each(|fid| {
+                let link = fid
+                    .link
+                    .as_ref()
+                    .ok_or(anyhow::anyhow!("Media to be download without URL"))?;
+                let res = reqwest::blocking::get(link)?;
+                if !res.status().is_success() {
+                    return Err(anyhow::anyhow!(
+                        "Failed to request Mastodon RSS: {} {}",
+                        res.status(),
+                        res.text()?
+                    ));
+                }
+                repo.put(fid, res)
+            })?),
+            Media::Video(fid) | Media::Audio(fid) => {
+                let link = fid
+                    .link
+                    .as_ref()
+                    .ok_or(anyhow::anyhow!("Media to be download without URL"))?;
+                let res = reqwest::blocking::get(link)?;
+                if !res.status().is_success() {
+                    return Err(anyhow::anyhow!(
+                        "Failed to request Mastodon RSS: {} {}",
+                        res.status(),
+                        res.text()?
+                    ));
+                }
+                repo.put(fid, res)
+            }
+        }
+    } else {
+        Ok(())
+    }
+}

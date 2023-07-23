@@ -11,7 +11,7 @@ const SQL_SELECT_POST: &str = "SELECT id FROM posts WHERE id = ?1";
 const SQL_INSERT_POST: &str =
     "INSERT INTO posts (id, body, link, last_build_date) VALUES (?1, ?2, ?3, ?4)";
 
-pub fn dedup_posts<'a>(
+pub fn dedup_posts(
     conn: &Connection,
     last_build_date: &str,
     posts: Vec<Post>,

@@ -28,6 +28,8 @@ pub enum Media {
 #[derive(Debug, PartialEq, Eq)]
 pub struct Fid {
     pub value: String,
+    /// Original URL
+    pub link: Option<String>,
 }
 
 pub trait Repo {
