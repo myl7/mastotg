@@ -1,18 +1,20 @@
 // Copyright (C) myl7
 // SPDX-License-Identifier: Apache-2.0
 
+mod consumer;
+mod db;
+mod post;
+mod producer;
+
 use std::time::Duration;
 use std::{fs, io, thread};
 
 use clap::Parser;
 use rusqlite::Connection;
 
-mod db;
-mod post;
-mod producer;
-
-use post::{FsRepo, Media, Post, Repo};
-use producer::{MastodonProducer, Producer};
+use crate::consumer::{Consumer, TelegramConsumer};
+use crate::post::{FsRepo, Media, Post, Repo};
+use crate::producer::{MastodonProducer, Producer};
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
@@ -32,6 +34,8 @@ fn main() -> anyhow::Result<()> {
 }
 
 fn run(cli: &Cli, conn: &Connection) -> anyhow::Result<()> {
+    // TODO: Logging
+
     let producer = MastodonProducer::new(cli.rss_url.clone());
     let (last_build_date, posts) = producer.fetch_posts()?;
     let posts = db::dedup_posts(conn, &last_build_date, posts)?;
@@ -44,9 +48,10 @@ fn run(cli: &Cli, conn: &Connection) -> anyhow::Result<()> {
         .iter()
         .try_for_each(|post| download_media(post, &mut repo))?;
 
-    // TODO: Send the posts
-    println!("last_build_date: {}", last_build_date);
-    println!("posts: {:?}", posts);
+    let consumer = TelegramConsumer::new(cli.tg_chan.clone());
+    posts
+        .iter()
+        .try_for_each(|post| consumer.send_post(post, &repo))?;
 
     db::save_posts(conn, &last_build_date, &posts.iter().collect::<Vec<_>>())?;
     Ok(())
@@ -61,6 +66,9 @@ struct Cli {
     /// Telegram bot token
     #[clap(long, env)]
     bot_token: String,
+    /// Telegram channel ID to send to, e.g., @myl7s
+    #[clap(long)]
+    tg_chan: String,
     /// Path to the SQLite database file to persist states
     #[clap(long, default_value = "mastotg.sqlite")]
     db_path: String,
