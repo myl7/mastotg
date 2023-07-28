@@ -6,9 +6,12 @@ Read from Mastodon official public user RSS, and write to Telegram channel via b
 
 Media attachments are our main concern. We support:
 
-- [ ] (Multiple grouped) images
-- [ ] Videos
-- [ ] Audios
+- [x] (Multiple grouped) images
+- [x] Videos
+- [x] Audios
+
+The project is still in the alpha stage.
+More development is going to be put in and you should not use it in production so far.
 
 ## License
 
