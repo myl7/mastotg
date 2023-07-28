@@ -46,6 +46,7 @@ impl Producer for MastodonProducer {
         let items = chan
             .items()
             .iter()
+            .rev()
             .map(Post::try_from)
             .collect::<Result<Vec<_>, _>>()?;
         Ok((last_build_date, items))

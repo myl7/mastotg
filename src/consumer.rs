@@ -3,7 +3,7 @@
 
 use reqwest::Url;
 use teloxide::prelude::*;
-use teloxide::types::{InputFile, InputMedia, InputMediaPhoto};
+use teloxide::types::{InputFile, InputMedia, InputMediaPhoto, ParseMode};
 use tokio::runtime;
 
 use crate::post::{Media, Post, Repo};
@@ -47,10 +47,16 @@ impl Consumer for TelegramConsumer {
 
 impl TelegramConsumer {
     async fn send_post(&self, post: &Post) -> anyhow::Result<()> {
+        let body_buf = post.body.clone();
+        let body = body_buf
+            .strip_prefix("<p>")
+            .and_then(|s| s.strip_suffix("</p>"))
+            .unwrap_or(&body_buf);
         match post.media.as_ref() {
             None => {
                 self.bot
-                    .send_message(self.tg_chan.clone(), &post.body)
+                    .send_message(self.tg_chan.clone(), body)
+                    .parse_mode(ParseMode::Html)
                     .await?;
                 Ok(())
             }
@@ -71,7 +77,7 @@ impl TelegramConsumer {
                             .map(|(i, url)| {
                                 let photo = InputMediaPhoto::new(InputFile::url(Url::parse(url)?));
                                 let photo = if i == 0 {
-                                    photo.caption(post.body.clone())
+                                    photo.caption(body.to_owned()).parse_mode(ParseMode::Html)
                                 } else {
                                     photo
                                 };
@@ -88,7 +94,8 @@ impl TelegramConsumer {
                 ))?;
                 self.bot
                     .send_video(self.tg_chan.clone(), InputFile::url(Url::parse(url)?))
-                    .caption(post.body.clone())
+                    .caption(body.to_owned())
+                    .parse_mode(ParseMode::Html)
                     .await?;
                 Ok(())
             }
@@ -98,7 +105,8 @@ impl TelegramConsumer {
                 ))?;
                 self.bot
                     .send_audio(self.tg_chan.clone(), InputFile::url(Url::parse(url)?))
-                    .caption(post.body.clone())
+                    .caption(body.to_owned())
+                    .parse_mode(ParseMode::Html)
                     .await?;
                 Ok(())
             }
