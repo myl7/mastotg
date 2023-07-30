@@ -1,0 +1,11 @@
+[Unit]
+Description=mastotg round timer
+
+[Timer]
+# Run every 5 minutes. Modify as needed.
+OnCalendar=*:00/5
+# If stopped and then restarted, include the passed time
+Persistent=true
+
+[Install]
+WantedBy=timers.target
