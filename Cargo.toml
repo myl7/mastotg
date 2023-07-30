@@ -1,6 +1,6 @@
 [package]
 name = "mastotg"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 authors = ["myl7 <myl@myl.moe>"]
 description = "Forward posts from Mastodon to Telegram channels"
