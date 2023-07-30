@@ -42,15 +42,10 @@ impl Consumer for TelegramConsumer {
 
 impl TelegramConsumer {
     async fn send_post(&self, post: &Post) -> anyhow::Result<()> {
-        let body_buf = post.body.clone();
-        let body = body_buf
-            .strip_prefix("<p>")
-            .and_then(|s| s.strip_suffix("</p>"))
-            .unwrap_or(&body_buf);
         match post.media.as_ref() {
             None => {
                 self.bot
-                    .send_message(self.tg_chan.clone(), body)
+                    .send_message(self.tg_chan.clone(), &post.body)
                     .parse_mode(ParseMode::Html)
                     .await?;
                 Ok(())
@@ -70,7 +65,7 @@ impl TelegramConsumer {
                                         self.tg_chan.clone(),
                                         InputFile::url(Url::parse(&item.uri)?),
                                     )
-                                    .caption(body.to_owned())
+                                    .caption(post.body.clone())
                                     .parse_mode(ParseMode::Html)
                                     .await?;
                                 Ok(())
@@ -81,7 +76,7 @@ impl TelegramConsumer {
                                         self.tg_chan.clone(),
                                         InputFile::url(Url::parse(&item.uri)?),
                                     )
-                                    .caption(body.to_owned())
+                                    .caption(post.body.clone())
                                     .parse_mode(ParseMode::Html)
                                     .await?;
                                 Ok(())
@@ -92,7 +87,7 @@ impl TelegramConsumer {
                                         self.tg_chan.clone(),
                                         InputFile::url(Url::parse(&item.uri)?),
                                     )
-                                    .caption(body.to_owned())
+                                    .caption(post.body.clone())
                                     .parse_mode(ParseMode::Html)
                                     .await?;
                                 Ok(())
@@ -119,7 +114,7 @@ impl TelegramConsumer {
                                 );
                                 let photo = InputMediaPhoto::new(InputFile::url(Url::parse(&item.uri)?));
                                 Ok(InputMedia::Photo(if i == 0 {
-                                    photo.caption(body.to_owned()).parse_mode(ParseMode::Html)
+                                    photo.caption(post.body.clone()).parse_mode(ParseMode::Html)
                                 } else {
                                     photo
                                 }))
