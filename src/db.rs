@@ -57,3 +57,5 @@ pub fn save_posts(conn: &Connection, last_build_date: &str, posts: &[&Post]) -> 
         .collect::<Result<Vec<_>, _>>()?;
     Ok(())
 }
+
+// TODO: Save media

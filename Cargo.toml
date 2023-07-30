@@ -1,6 +1,6 @@
 [package]
 name = "mastotg"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["myl7 <myl@myl.moe>"]
 description = "Forward posts from Mastodon to Telegram channels"
@@ -18,7 +18,7 @@ keywords = [
 ]
 
 [dependencies]
-anyhow = "1.0.71"
+anyhow = { version = "1.0.71", features = ["backtrace"] }
 reqwest = { version = "0.11.18", features = ["blocking"] }
 rss = "2.0.4"
 chrono = "0.4.26"

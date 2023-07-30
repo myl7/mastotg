@@ -8,7 +8,7 @@ use regex::Regex;
 use rss::extension::Extension;
 use rss::{Channel, Item};
 
-use crate::post::{Fid, Media, Post};
+use crate::post::{Media, MediaItem, MediaLayout, MediaMedium, Post};
 
 pub trait Producer {
     fn fetch_posts(&self) -> anyhow::Result<(String, Vec<Post>)>;
@@ -54,57 +54,55 @@ impl Producer for MastodonProducer {
 }
 
 impl Post {
-    pub fn parse_media(items: &[&Extension]) -> anyhow::Result<Media> {
-        if items.is_empty() {
-            return Err(anyhow::anyhow!("Empty media list. Wired."));
-        }
+    pub fn parse_media(items: &[Extension]) -> anyhow::Result<Media> {
+        anyhow::ensure!(!items.is_empty(), "Empty media list. Wired.");
         if items.len() == 1 {
+            let err_ctx = "in the media item 0";
             let url = items[0]
                 .attrs()
                 .get("url")
-                .ok_or(anyhow::anyhow!("No URL in the media item"))?;
+                .ok_or(anyhow::anyhow!("No URL {}", err_ctx))?;
             match items[0].attrs().get("medium").map(|s| s.as_str()) {
-                Some("image") => Ok(Media::Photos(vec![Fid {
-                    value: fid_value_from_url(url)?,
-                    link: Some(url.to_owned()),
-                }])),
-                Some("video") => Ok(Media::Video(Fid {
-                    value: fid_value_from_url(url)?,
-                    link: Some(url.to_owned()),
-                })),
-                Some("audio") => Ok(Media::Audio(Fid {
-                    value: fid_value_from_url(url)?,
-                    link: Some(url.to_owned()),
-                })),
-                Some(t) => Err(anyhow::anyhow!("Unsupported media type: {}", t)),
-                None => Err(anyhow::anyhow!("No medium to indicate the media type")),
+                Some(s) => Ok(Media {
+                    layout: MediaLayout::Single,
+                    items: vec![MediaItem {
+                        uri: url.to_owned(),
+                        medium: MediaMedium::try_from(s)?,
+                        link: Some(url.to_owned()),
+                    }],
+                }),
+                None => anyhow::bail!("No medium to indicate the media type {}", err_ctx),
             }
         } else {
-            let fids = items
+            let items = items
                 .iter()
-                .map(|item| {
-                    let t = item
+                .enumerate()
+                .map(|(i, item)| {
+                    let t = item.attrs().get("medium").ok_or(anyhow::anyhow!(
+                        "No medium to indicate the media type in the media item {}",
+                        i
+                    ))?;
+                    anyhow::ensure!(
+                        t == "image",
+                        "Unsupported media type for multiple media items in the media item {}: {}",
+                        i,
+                        t,
+                    );
+                    let url = item
                         .attrs()
-                        .get("medium")
-                        .ok_or(anyhow::anyhow!("No medium to indicate the media type"))?;
-                    if t == "image" {
-                        let url = item
-                            .attrs()
-                            .get("url")
-                            .ok_or(anyhow::anyhow!("No URL in the media item"))?;
-                        Ok(Fid {
-                            value: fid_value_from_url(url)?,
-                            link: Some(url.to_owned()),
-                        })
-                    } else {
-                        Err(anyhow::anyhow!(
-                            "Unsupported media type for multiple media files: {}",
-                            t
-                        ))
-                    }
+                        .get("url")
+                        .ok_or(anyhow::anyhow!("No URL in the media item {}", i))?;
+                    Ok(MediaItem {
+                        uri: url.to_owned(),
+                        medium: MediaMedium::Image,
+                        link: Some(url.to_owned()),
+                    })
                 })
                 .collect::<Result<Vec<_>, _>>()?;
-            Ok(Media::Photos(fids))
+            Ok(Media {
+                layout: MediaLayout::Grouped,
+                items,
+            })
         }
     }
 }
@@ -117,7 +115,7 @@ impl TryFrom<&Item> for Post {
             .extensions()
             .get("media")
             .and_then(|m| m.get("content"))
-            .map(|items| Self::parse_media(&items.iter().collect::<Vec<_>>()))
+            .map(|items| Self::parse_media(items))
             .transpose()?;
         Ok(Self {
             id: item
@@ -135,7 +133,8 @@ impl TryFrom<&Item> for Post {
     }
 }
 
-fn fid_value_from_url(url: &str) -> anyhow::Result<String> {
+#[allow(dead_code)]
+fn fname_from_url(url: &str) -> anyhow::Result<String> {
     let name = Regex::new(r"^[^/:]+?://[^/]+?/system/media_attachments/files/")
         .unwrap()
         .replace(url, "");
