@@ -6,8 +6,8 @@ mod db;
 mod post;
 mod producer;
 
+use std::thread;
 use std::time::Duration;
-use std::{fs, io, thread};
 
 use clap::Parser;
 use rusqlite::Connection;
@@ -16,11 +16,18 @@ use crate::consumer::{Consumer, TelegramConsumer};
 use crate::producer::{MastodonProducer, Producer};
 
 fn main() -> anyhow::Result<()> {
+    env_logger::init();
+
     let mut cli = Cli::parse();
     cli.clean();
 
     let conn = Connection::open(&cli.db_path)?;
     conn.execute_batch(SQL_INIT_TABLES)?;
+    // TODO: Save media files possibly locally
+    // fs::create_dir(&cli.media_dir).or_else(|e| match e.kind() {
+    //     io::ErrorKind::AlreadyExists => Ok(()),
+    //     _ => Err(e),
+    // })?;
 
     if let Some(interval) = cli.loop_interval {
         loop {
@@ -34,20 +41,21 @@ fn main() -> anyhow::Result<()> {
 }
 
 fn run(cli: &Cli, conn: &Connection) -> anyhow::Result<()> {
-    // TODO: Logging
-
+    log::debug!("Started run");
     let producer = MastodonProducer::new(cli.rss_url.clone());
     let (last_build_date, posts) = producer.fetch_posts()?;
     let posts = db::dedup_posts(conn, &last_build_date, posts)?;
-    fs::create_dir(&cli.media_dir).or_else(|e| match e.kind() {
-        io::ErrorKind::AlreadyExists => Ok(()),
-        _ => Err(e),
-    })?;
+
+    if !posts.is_empty() {
+        log::info!("Fetched {} new posts at {last_build_date}", posts.len());
+        log::debug!("Fetched new posts: {:?}", posts);
+    }
 
     let consumer = TelegramConsumer::new(cli.tg_chan.clone());
     posts.iter().try_for_each(|post| consumer.send_post(post))?;
 
     db::save_posts(conn, &last_build_date, &posts.iter().collect::<Vec<_>>())?;
+    log::debug!("Finished run");
     Ok(())
 }
 
@@ -63,9 +71,9 @@ struct Cli {
     /// Path to the SQLite database file to persist states
     #[clap(long, default_value = "mastotg.sqlite")]
     db_path: String,
-    /// Dir to store media files
-    #[clap(long, default_value = "media")]
-    media_dir: String,
+    // /// Dir to store media files
+    // #[clap(long, default_value = "media")]
+    // media_dir: String,
     // /// Keep media files after sending
     // #[clap(long)]
     // keep_media: bool,
