@@ -49,12 +49,13 @@ fn run(cli: &Cli, conn: &Connection) -> anyhow::Result<()> {
     if !posts.is_empty() {
         log::info!("Fetched {} new posts at {last_build_date}", posts.len());
         log::debug!("Fetched new posts: {:?}", posts);
+        let consumer = TelegramConsumer::new(cli.tg_chan.clone());
+        posts.iter().try_for_each(|post| consumer.send_post(post))?;
+        db::save_posts(conn, &last_build_date, &posts.iter().collect::<Vec<_>>())?;
+    } else {
+        log::debug!("Fetched no new posts");
     }
 
-    let consumer = TelegramConsumer::new(cli.tg_chan.clone());
-    posts.iter().try_for_each(|post| consumer.send_post(post))?;
-
-    db::save_posts(conn, &last_build_date, &posts.iter().collect::<Vec<_>>())?;
     log::debug!("Finished run");
     Ok(())
 }
