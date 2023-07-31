@@ -139,36 +139,55 @@ fn clean_body(body: &str) -> anyhow::Result<String> {
     let mut buf = String::new();
     let mut reader = Reader::from_str(body);
     // Only need to track 1 layer so a bool is enough
-    let mut ignore = false;
+    // <a> is either a link or a hashtag
+    let mut in_link = false;
+    let mut in_hashtag = false;
     loop {
         #[allow(clippy::single_match)]
         match reader.read_event()? {
             Event::Eof => break,
             Event::Start(elem) => match elem.name().as_ref() {
                 b"a" => {
+                    let mut hashtag = false;
                     let mut href_opt = None;
                     elem.html_attributes().try_for_each(|res| {
                         let attr = res?;
-                        if attr.key == QName(b"href") {
-                            href_opt = Some(attr.unescape_value()?)
+                        match attr.key {
+                            QName(b"class") => {
+                                hashtag = attr.unescape_value()?.find("hashtag").is_some()
+                            }
+                            QName(b"href") => href_opt = Some(attr.unescape_value()?),
+                            _ => (),
                         }
                         anyhow::Ok(())
                     })?;
-                    let href = href_opt.ok_or(anyhow::anyhow!("No href in the <a> tag"))?;
-                    buf += &format!(r#"<a href="{}">{href}"#, href);
-                    ignore = true;
+                    if hashtag && !in_hashtag {
+                        in_hashtag = true;
+                    } else if !in_link {
+                        let href = href_opt.ok_or(anyhow::anyhow!("No href in the <a> tag"))?;
+                        buf += &format!(r#"<a href="{}">{href}"#, href);
+                        in_link = true;
+                    } else {
+                        anyhow::bail!("Unknown <a> tag");
+                    }
                 }
                 _ => (),
             },
             Event::Text(elem) => {
-                if !ignore {
+                if !in_link {
                     buf += &elem.unescape()?;
                 }
             }
             Event::End(elem) => match elem.name().as_ref() {
                 b"a" => {
-                    buf += "</a>";
-                    ignore = false;
+                    if in_hashtag {
+                        in_hashtag = false;
+                    } else if in_link {
+                        buf += "</a>";
+                        in_link = false;
+                    } else {
+                        anyhow::bail!("Unknown <a> tag");
+                    }
                 }
                 _ => (),
             },
