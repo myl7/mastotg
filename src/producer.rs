@@ -141,6 +141,7 @@ fn clean_body(body: &str) -> anyhow::Result<String> {
     // Only need to track 1 layer so a bool is enough
     let mut ignore = false;
     loop {
+        #[allow(clippy::single_match)]
         match reader.read_event()? {
             Event::Eof => break,
             Event::Start(elem) => match elem.name().as_ref() {
@@ -154,17 +155,9 @@ fn clean_body(body: &str) -> anyhow::Result<String> {
                         anyhow::Ok(())
                     })?;
                     let href = href_opt.ok_or(anyhow::anyhow!("No href in the <a> tag"))?;
-                    buf += &format!(r#"<a href="{}">"#, href);
+                    buf += &format!(r#"<a href="{}">{href}"#, href);
+                    ignore = true;
                 }
-                b"span" => elem.html_attributes().try_for_each(|res| {
-                    let attr = res?;
-                    if attr.key == QName(b"class")
-                        && attr.unescape_value()?.find("invisible").is_some()
-                    {
-                        ignore = true;
-                    }
-                    anyhow::Ok(())
-                })?,
                 _ => (),
             },
             Event::Text(elem) => {
@@ -173,11 +166,12 @@ fn clean_body(body: &str) -> anyhow::Result<String> {
                 }
             }
             Event::End(elem) => match elem.name().as_ref() {
-                b"a" => buf += "</a>",
-                b"span" => ignore = false,
+                b"a" => {
+                    buf += "</a>";
+                    ignore = false;
+                }
                 _ => (),
             },
-            #[allow(clippy::single_match)]
             Event::Empty(elem) => match elem.name().as_ref() {
                 b"br" => buf += "\n",
                 _ => (),
