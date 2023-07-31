@@ -4,11 +4,11 @@ Requires=network.target network-online.target
 
 [Service]
 Type=oneshot
-# Replace LOWERCASE ones according to your installation and configuration
+# Replace UPPERCASE ones according to your installation and configuration
 ExecStart=ABUSOLUTE_PATH_TO_mastotg --rss-url YOUR_RSS_URL --tg-chan YOUR_TG_CHAN --db-path YOUR_DB_PATH
 # Put the envs here. It should not be so bad as long as the unit file is in mode 400.
 # For more safety, refer to LoadCredential.
 Environment=TELOXIDE_TOKEN=YOUR_TG_BOT_TOKEN
-# Create a standalone user for the program if you gain more safety.
+# Create a standalone user for the program to gain more safety.
 #User=
 #Group=
