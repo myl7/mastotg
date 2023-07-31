@@ -31,26 +31,38 @@ fn main() -> anyhow::Result<()> {
 
     if let Some(interval) = cli.loop_interval {
         loop {
-            run(&cli, &conn)?;
+            run_round(&cli, &conn)?;
             thread::sleep(Duration::from_secs(interval));
         }
     }
 
-    run(&cli, &conn)?;
+    run_round(&cli, &conn)?;
     Ok(())
 }
 
-fn run(cli: &Cli, conn: &Connection) -> anyhow::Result<()> {
+fn run_round(cli: &Cli, conn: &Connection) -> anyhow::Result<()> {
     log::debug!("Started run");
     let producer = MastodonProducer::new(cli.rss_url.clone());
     let (last_build_date, posts) = producer.fetch_posts()?;
     let posts = db::dedup_posts(conn, &last_build_date, posts)?;
 
     if !posts.is_empty() {
-        log::info!("Fetched {} new posts at {last_build_date}", posts.len());
+        log::info!("Fetched {} new posts from {last_build_date}", posts.len());
         log::debug!("Fetched new posts: {:?}", posts);
-        let consumer = TelegramConsumer::new(cli.tg_chan.clone());
-        posts.iter().try_for_each(|post| consumer.send_post(post))?;
+
+        if !cli.no_send {
+            let consumer = TelegramConsumer::new(cli.tg_chan.clone());
+            posts.iter().try_for_each(|post| consumer.send_post(post))?;
+            log::info!(
+                "Sent these {} new posts from {last_build_date}",
+                posts.len()
+            );
+        }
+
+        if cli.print {
+            posts.iter().for_each(|post| println!("{:#?}", post));
+        }
+
         db::save_posts(conn, &last_build_date, &posts.iter().collect::<Vec<_>>())?;
     } else {
         log::debug!("Fetched no new posts");
@@ -81,6 +93,12 @@ struct Cli {
     /// Use builtin loop runner to run the program every fixed interval. Unit: seconds.
     #[clap(long)]
     loop_interval: Option<u64>,
+    /// Fetch and save posts but do not send them
+    #[clap(long)]
+    no_send: bool,
+    /// Print posts to stdout additionally
+    #[clap(long)]
+    print: bool,
 }
 
 impl Cli {
