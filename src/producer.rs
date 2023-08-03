@@ -60,10 +60,11 @@ impl TryFrom<&Item> for Post {
     type Error = anyhow::Error;
 
     fn try_from(item: &Item) -> Result<Self, Self::Error> {
-        let body = clean_body(
-            item.description()
-                .ok_or(anyhow::anyhow!("No description in the item"))?,
-        )?;
+        let body = item
+            .description()
+            .map(|body| clean_body(body))
+            .transpose()?
+            .unwrap_or("".to_owned());
         let media = item
             .extensions()
             .get("media")
