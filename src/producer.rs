@@ -11,7 +11,7 @@ use regex::Regex;
 use rss::extension::Extension;
 use rss::{Channel, Item};
 
-use crate::post::{Media, MediaItem, MediaLayout, MediaMedium, Post};
+use crate::post::{Media, MediaItem, MediaLayout, MediaMedium, Post, Rel};
 
 pub trait Producer {
     fn fetch_posts(&self) -> anyhow::Result<(String, Vec<Post>)>;
@@ -50,19 +50,17 @@ impl Producer for MastodonProducer {
             .items()
             .iter()
             .rev()
-            .map(Post::try_from)
+            .map(|item| self.parse_items(item))
             .collect::<Result<Vec<_>, _>>()?;
         Ok((last_build_date, items))
     }
 }
 
-impl TryFrom<&Item> for Post {
-    type Error = anyhow::Error;
-
-    fn try_from(item: &Item) -> Result<Self, Self::Error> {
+impl MastodonProducer {
+    fn parse_items(&self, item: &Item) -> anyhow::Result<Post> {
         let body = item
             .description()
-            .map(|body| clean_body(body))
+            .map(clean_body)
             .transpose()?
             .unwrap_or("".to_owned());
         let media = item
@@ -71,7 +69,41 @@ impl TryFrom<&Item> for Post {
             .and_then(|m| m.get("content"))
             .map(|items| parse_media(items))
             .transpose()?;
-        Ok(Self {
+
+        let link = item.link().ok_or(anyhow::anyhow!("No link in the item"))?;
+        let url_prefix = self.rss_url.strip_suffix(".rss").ok_or(anyhow::anyhow!(
+            "RSS URL does not end with '.rss': {}",
+            self.rss_url
+        ))?;
+        let rel = if link.starts_with(url_prefix) {
+            let url = Regex::new(r"/@[^/]+?/")
+                .unwrap()
+                .replace(link, "/api/v1/statuses/")
+                .to_string();
+            let res = reqwest::blocking::get(url)?;
+            if !res.status().is_success() {
+                return Err(anyhow::anyhow!(
+                    "Failed to request Mastodon status API: {} {}",
+                    res.status(),
+                    res.text()?
+                ));
+            }
+            #[derive(serde::Deserialize)]
+            struct Res {
+                in_reply_to_id: Option<String>,
+            }
+            let body: Res = res.json()?;
+            if let Some(digit_id) = &body.in_reply_to_id {
+                let id = url_prefix.to_owned() + "/" + digit_id;
+                vec![Rel::ReplyTo { id }]
+            } else {
+                vec![]
+            }
+        } else {
+            vec![]
+        };
+
+        Ok(Post {
             id: item
                 .guid()
                 .ok_or(anyhow::anyhow!("No GUID in the item"))?
@@ -79,7 +111,8 @@ impl TryFrom<&Item> for Post {
                 .clone(),
             body,
             media,
-            link: item.link().map(|s| s.to_owned()),
+            rel,
+            link: Some(link.to_owned()),
         })
     }
 }
@@ -155,9 +188,14 @@ fn clean_body(body: &str) -> anyhow::Result<String> {
                         let attr = res?;
                         match attr.key {
                             QName(b"class") => {
-                                hashtag = attr.unescape_value()?.find("hashtag").is_some()
+                                hashtag = attr
+                                    .decode_and_unescape_value(&reader)?
+                                    .find("hashtag")
+                                    .is_some()
                             }
-                            QName(b"href") => href_opt = Some(attr.unescape_value()?),
+                            QName(b"href") => {
+                                href_opt = Some(attr.decode_and_unescape_value(&reader)?)
+                            }
                             _ => (),
                         }
                         anyhow::Ok(())

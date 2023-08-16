@@ -9,6 +9,8 @@ pub struct Post {
     pub body: String,
     /// Media attachments
     pub media: Option<Media>,
+    /// Relationship with other posts
+    pub rel: Vec<Rel>,
     /// Optional original URL
     pub link: Option<String>,
 }
@@ -55,4 +57,11 @@ impl TryFrom<&str> for MediaMedium {
             _ => anyhow::bail!("Unsupported media type {}", value),
         }
     }
+}
+
+#[derive(Debug)]
+pub enum Rel {
+    ReplyTo { id: String },
+    // TODO: Impl
+    // FwdFrom { id: String },
 }
