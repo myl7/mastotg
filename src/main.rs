@@ -1,131 +1,121 @@
 // Copyright (C) myl7
 // SPDX-License-Identifier: Apache-2.0
 
-mod consumer;
-mod db;
-mod post;
-mod producer;
+mod as2;
+mod cli;
+mod con;
+mod pro;
+mod query;
+mod utils;
 
-use std::thread;
-use std::time::Duration;
-
+use anyhow::Result;
 use clap::Parser;
-use rusqlite::Connection;
+use reqwest::Url;
+use tokio::time::{self, Duration};
 
-use crate::consumer::{Consumer, TelegramConsumer};
-use crate::producer::{MastodonProducer, Producer};
+use crate::as2::Page;
+use crate::cli::{Cli, CliInput, CliOutput};
+use crate::con::{Con, TgCon};
+use crate::pro::{Pro, UriPro};
+use crate::query::query_outbox_url;
+use crate::utils::int_id;
 
-fn main() -> anyhow::Result<()> {
+fn main() -> Result<()> {
     env_logger::init();
 
     let mut cli = Cli::parse();
-    cli.clean();
+    cli.clean()?;
 
-    let conn = Connection::open(&cli.db_path)?;
-    conn.execute_batch(SQL_INIT_TABLES)?;
-    // TODO: Save media files possibly locally
-    // fs::create_dir(&cli.media_dir).or_else(|e| match e.kind() {
-    //     io::ErrorKind::AlreadyExists => Ok(()),
-    //     _ => Err(e),
-    // })?;
+    let ctx = Ctx { cli: Box::new(cli) };
+    run(&ctx)?;
+    Ok(())
+}
 
+struct Ctx {
+    cli: Box<Cli>,
+}
+
+#[tokio::main]
+async fn run(ctx: &Ctx) -> Result<()> {
+    let cli = &ctx.cli;
     if let Some(interval) = cli.loop_interval {
+        let mut min_id = cli.min_id;
         loop {
-            run_round(&cli, &conn)?;
-            thread::sleep(Duration::from_secs(interval));
+            min_id = run_round(ctx, min_id).await?;
+            time::sleep(Duration::from_secs(interval)).await;
         }
-    }
-
-    run_round(&cli, &conn)?;
-    Ok(())
-}
-
-fn run_round(cli: &Cli, conn: &Connection) -> anyhow::Result<()> {
-    log::debug!("Started run");
-    let producer = MastodonProducer::new(cli.rss_url.clone());
-    let (last_build_date, posts) = producer.fetch_posts()?;
-    let posts = db::dedup_posts(conn, &last_build_date, posts)?;
-
-    if !posts.is_empty() {
-        log::info!("Fetched {} new posts from {last_build_date}", posts.len());
-        log::debug!("Fetched new posts: {:?}", posts);
-
-        if !cli.no_send {
-            let consumer = TelegramConsumer::new(cli.tg_chan.clone());
-            posts.iter().try_for_each(|post| consumer.send_post(post))?;
-            log::info!(
-                "Sent these {} new posts from {last_build_date}",
-                posts.len()
-            );
-        }
-
-        if cli.print {
-            posts.iter().for_each(|post| println!("{:#?}", post));
-        }
-
-        db::save_posts(conn, &last_build_date, &posts.iter().collect::<Vec<_>>())?;
     } else {
-        log::debug!("Fetched no new posts");
+        run_round(ctx, cli.min_id).await?;
     }
-
-    log::debug!("Finished run");
     Ok(())
 }
 
-#[derive(Parser)]
-#[command(author, version, about, long_about = None)]
-struct Cli {
-    /// URL to the Mastodon public user RSS, e.g., https://social.myl.moe/@myl.rss
-    #[clap(long)]
-    rss_url: String,
-    /// Telegram channel ID to send to, e.g., @myl7s
-    #[clap(long)]
-    tg_chan: String,
-    /// Path to the SQLite database file to persist states
-    #[clap(long, default_value = "mastotg.sqlite")]
-    db_path: String,
-    // /// Dir to store media files
-    // #[clap(long, default_value = "media")]
-    // media_dir: String,
-    // /// Keep media files after sending
-    // #[clap(long)]
-    // keep_media: bool,
-    /// Use builtin loop runner to run the program every fixed interval. Unit: seconds.
-    #[clap(long)]
-    loop_interval: Option<u64>,
-    /// Fetch and save posts but do not send them
-    #[clap(long)]
-    no_send: bool,
-    /// Print posts to stdout additionally
-    #[clap(long)]
-    print: bool,
-}
+async fn run_round(ctx: &Ctx, min_id: i64) -> Result<i64> {
+    log::debug!("Starts to run a round");
 
-impl Cli {
-    fn clean(&mut self) {
-        if !self.tg_chan.starts_with('@') {
-            self.tg_chan.insert(0, '@');
-        };
+    let uri = match ctx.cli.input.as_ref() {
+        None | Some(CliInput::Stdin) => r"stdio://in".to_owned(),
+        input => {
+            let base_url = match input {
+                Some(CliInput::Fetch) => ctx.cli.host.as_ref().unwrap().to_owned(),
+                Some(CliInput::QueryFetch) => {
+                    let host = ctx.cli.host.as_ref().unwrap();
+                    let acct = ctx.cli.acct.as_ref().unwrap();
+                    query_outbox_url(host, acct).await?
+                }
+                _ => unreachable!(),
+            };
+            let id_range_query = if min_id >= 0 {
+                Some(("min_id", min_id.to_string()))
+            } else {
+                None
+            };
+            let mut u = Url::parse(&base_url)?;
+            {
+                let mut q = u.query_pairs_mut();
+                if let Some((k, v)) = id_range_query {
+                    q.append_pair(k, &v);
+                }
+                q.append_pair("page", "true");
+            }
+            let url = u.to_string();
+            log::debug!("The page is at {url}");
+            url
+        }
+    };
+
+    let mut pro = UriPro::new(uri);
+    let mut next_min_id = min_id;
+    loop {
+        let page = pro.fetch().await?;
+        let post_len = page.ordered_items.len();
+        if post_len == 0 || ctx.cli.no_follow_paging {
+            break;
+        }
+        log::info!("Fetched {post_len} posts from the page");
+        let iid = int_id(page.ordered_items.first().unwrap().id.as_ref())?;
+        consume(ctx, page).await?;
+        next_min_id = iid;
     }
+
+    log::info!("Finished running a round with min_id {next_min_id}");
+    Ok(next_min_id)
 }
 
-const SQL_INIT_TABLES: &str = r#"
-CREATE TABLE IF NOT EXISTS posts (
-    id TEXT PRIMARY KEY,
-    body TEXT NOT NULL,
-    link TEXT NOT NULL,
-    created_time TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    last_build_date TEXT NOT NULL,
-    FOREIGN KEY(last_build_date) REFERENCES last_build_dates(value)
-);
-CREATE TABLE IF NOT EXISTS media (
-    uri TEXT PRIMARY KEY,
-    type TEXT NOT NULL,
-    link TEXT NOT NULL,
-    post_id TEXT NOT NULL,
-    FOREIGN KEY(post_id) REFERENCES posts(id)
-);
-CREATE TABLE IF NOT EXISTS last_build_dates (
-    value TEXT PRIMARY KEY
-);
-"#;
+async fn consume(ctx: &Ctx, page: Page) -> Result<()> {
+    match ctx.cli.output.as_ref() {
+        None | Some(CliOutput::Print) => {
+            page.ordered_items.iter().try_for_each(|post| {
+                println!("{}", serde_json::to_string_pretty(post)?);
+                anyhow::Ok(())
+            })?;
+        }
+        Some(CliOutput::TgSend) => {
+            let post_len = page.ordered_items.len();
+            let con = TgCon::new(ctx.cli.tg_chan.clone().unwrap());
+            con.send_page(page).await?;
+            log::info!("Sent {post_len} posts to the Telegram channel");
+        }
+    }
+    Ok(())
+}
