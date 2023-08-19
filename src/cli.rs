@@ -31,11 +31,9 @@ pub struct Cli {
     /// The leading `@` is optional.
     #[clap(long)]
     pub tg_chan: Option<String>,
-    /// Path to the JSON file to persist states.
-    /// If not specified, do not write to a file.
-    /// Then users should use the log to trace the states and pass them manually.
-    #[clap(short, long)]
-    pub file: Option<String>,
+    /// Path to the SQLite database file to persist states
+    #[clap(short = 'f', long)]
+    pub db_file: String,
     /// Use builtin loop runner to run the program every fixed interval. Unit: Seconds.
     #[clap(long)]
     pub loop_interval: Option<u64>,

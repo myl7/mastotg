@@ -3,7 +3,7 @@
 
 //! Post consumers
 
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 
 use anyhow::{anyhow, bail, ensure, Result};
 use async_trait::async_trait;
@@ -12,22 +12,25 @@ use quick_xml::name::QName;
 use quick_xml::reader::Reader;
 use reqwest::Url;
 use teloxide::prelude::*;
-use teloxide::types::{InputFile, InputMedia, InputMediaPhoto, ParseMode};
+use teloxide::types::{InputFile, InputMedia, InputMediaPhoto, MessageId, ParseMode};
 use teloxide::RequestError;
 use tokio::time;
 
 use crate::as2::{Create, Page, Post};
+use crate::db::DbConn;
+
+pub type IdMap = HashMap<String, Vec<u8>>;
 
 /// Consumer trait
 #[async_trait]
 pub trait Con {
     /// Send posts in the form of activities.
     /// Not send one-by-one directly in case collection-level cleaning is required.
-    async fn send(&self, items: Vec<Create>) -> Result<()>;
+    async fn send(&self, db: &DbConn, items: Vec<Create>) -> Result<IdMap>;
 
     /// Send a page of posts
-    async fn send_page(&self, page: Page) -> Result<()> {
-        self.send(page.ordered_items).await
+    async fn send_page(&self, db: &DbConn, page: Page) -> Result<IdMap> {
+        self.send(db, page.ordered_items).await
     }
 }
 
@@ -45,14 +48,31 @@ impl TgCon {
     }
 }
 
+macro_rules! handle_reply {
+    ($send:ident, $db:ident, $id_map:ident, $post:ident) => {
+        if let Some(id) = $post.in_reply_to.as_ref() {
+            let mut tg_id_opt = $id_map.get(id).cloned();
+            if let None = tg_id_opt {
+                tg_id_opt = $db.query_id_map(id.to_owned()).await?;
+            }
+            if let Some(tg_id) = tg_id_opt {
+                let (_, msg_id) = de_tg_msg_id(&tg_id);
+                $send = $send
+                    .reply_to_message_id(MessageId(msg_id))
+                    .allow_sending_without_reply(true);
+            }
+        }
+    };
+}
+
 impl TgCon {
-    async fn send_one(&self, mut act: Create) -> Result<()> {
+    async fn send_one(&self, db: &DbConn, id_map: &IdMap, mut act: Create) -> Result<Vec<u8>> {
         act.object.content = clean_body(&act.object.content)?;
         let post = &act.object;
 
         if post.attachment.is_empty() {
-            self.send_text(post).await?;
-            return Ok(());
+            let id = self.send_text(db, id_map, post).await?;
+            return Ok(id);
         }
 
         if post.attachment.len() > 1 {
@@ -62,8 +82,8 @@ impl TgCon {
                     .all(|att| att.media_type.starts_with("image/")),
                 "media type not all images for multiple media"
             );
-            self.send_multi_grouped_images(post).await?;
-            return Ok(());
+            let id = self.send_multi_grouped_images(db, id_map, post).await?;
+            return Ok(id);
         }
 
         let att = &post.attachment[0];
@@ -71,30 +91,31 @@ impl TgCon {
             .media_type
             .find('/')
             .ok_or(anyhow!("invalid media type {}", att.media_type))?];
-        match media_type {
-            "image" => {
-                self.send_image(post).await?;
-            }
-            "video" => {
-                self.send_video(post).await?;
-            }
-            "audio" => {
-                self.send_audio(post).await?;
-            }
+        let id = match media_type {
+            "image" => self.send_image(db, id_map, post).await?,
+            "video" => self.send_video(db, id_map, post).await?,
+            "audio" => self.send_audio(db, id_map, post).await?,
             _ => bail!("unknown media type {}", att.media_type),
-        }
-        Ok(())
+        };
+        Ok(id)
     }
 
-    async fn send_text(&self, post: &Post) -> Result<()> {
-        self.bot
+    async fn send_text(&self, db: &DbConn, id_map: &IdMap, post: &Post) -> Result<Vec<u8>> {
+        let mut send = self
+            .bot
             .send_message(self.tg_chan.clone(), &post.content)
-            .parse_mode(ParseMode::Html)
-            .await?;
-        Ok(())
+            .parse_mode(ParseMode::Html);
+        handle_reply!(send, db, id_map, post);
+        let msg = send.await?;
+        Ok(ser_tg_msg_id(&msg))
     }
 
-    async fn send_multi_grouped_images(&self, post: &Post) -> Result<()> {
+    async fn send_multi_grouped_images(
+        &self,
+        db: &DbConn,
+        id_map: &IdMap,
+        post: &Post,
+    ) -> Result<Vec<u8>> {
         let photos = post
             .attachment
             .iter()
@@ -110,46 +131,53 @@ impl TgCon {
                 }))
             })
             .collect::<Result<Vec<_>>>()?;
-        self.bot
-            .send_media_group(self.tg_chan.clone(), photos)
-            .await?;
-        Ok(())
+        let mut send = self.bot.send_media_group(self.tg_chan.clone(), photos);
+        handle_reply!(send, db, id_map, post);
+        let msgs = send.await?;
+        Ok(ser_tg_msg_id(&msgs[0]))
     }
 
-    async fn send_image(&self, post: &Post) -> Result<()> {
+    async fn send_image(&self, db: &DbConn, id_map: &IdMap, post: &Post) -> Result<Vec<u8>> {
         let att = &post.attachment[0];
-        self.bot
+        let mut send = self
+            .bot
             .send_photo(self.tg_chan.clone(), InputFile::url(Url::parse(&att.url)?))
             .caption(post.content.clone())
-            .parse_mode(ParseMode::Html)
-            .await?;
-        Ok(())
+            .parse_mode(ParseMode::Html);
+        handle_reply!(send, db, id_map, post);
+        let msg = send.await?;
+        Ok(ser_tg_msg_id(&msg))
     }
 
-    async fn send_video(&self, post: &Post) -> Result<()> {
+    async fn send_video(&self, db: &DbConn, id_map: &IdMap, post: &Post) -> Result<Vec<u8>> {
         let att = &post.attachment[0];
-        self.bot
+        let mut send = self
+            .bot
             .send_video(self.tg_chan.clone(), InputFile::url(Url::parse(&att.url)?))
             .caption(post.content.clone())
-            .parse_mode(ParseMode::Html)
-            .await?;
-        Ok(())
+            .parse_mode(ParseMode::Html);
+        handle_reply!(send, db, id_map, post);
+        let msg = send.await?;
+        Ok(ser_tg_msg_id(&msg))
     }
 
-    async fn send_audio(&self, post: &Post) -> Result<()> {
+    async fn send_audio(&self, db: &DbConn, id_map: &IdMap, post: &Post) -> Result<Vec<u8>> {
         let att = &post.attachment[0];
-        self.bot
+        let mut send = self
+            .bot
             .send_audio(self.tg_chan.clone(), InputFile::url(Url::parse(&att.url)?))
             .caption(post.content.clone())
-            .parse_mode(ParseMode::Html)
-            .await?;
-        Ok(())
+            .parse_mode(ParseMode::Html);
+        handle_reply!(send, db, id_map, post);
+        let msg = send.await?;
+        Ok(ser_tg_msg_id(&msg))
     }
 }
 
 #[async_trait]
 impl Con for TgCon {
-    async fn send(&self, items: Vec<Create>) -> Result<()> {
+    async fn send(&self, db: &DbConn, items: Vec<Create>) -> Result<IdMap> {
+        let mut id_map = HashMap::new();
         let mut queue: VecDeque<_> = items.into_iter().rev().collect();
         while !queue.is_empty() {
             let item = if let Some(x) = queue.pop_front() {
@@ -157,20 +185,41 @@ impl Con for TgCon {
             } else {
                 break;
             };
-            if let Err(e) = self.send_one(item.clone()).await {
-                if let Some(req_e) = e.downcast_ref::<RequestError>() {
-                    if let RequestError::RetryAfter(du) = req_e {
-                        log::warn!("Retry after {} seconds due to flood control", du.as_secs());
-                        queue.push_front(item);
-                        time::sleep(*du).await;
+
+            match self.send_one(db, &id_map, item.clone()).await {
+                Err(e) => {
+                    if let Some(req_e) = e.downcast_ref::<RequestError>() {
+                        if let RequestError::RetryAfter(du) = req_e {
+                            log::warn!("Retry after {} seconds due to flood control", du.as_secs());
+                            queue.push_front(item);
+                            time::sleep(*du).await;
+                        }
+                    } else {
+                        bail!(e)
                     }
-                } else {
-                    bail!(e)
+                }
+                Ok(tg_id) => {
+                    id_map.insert(item.object.id.clone(), tg_id);
                 }
             }
         }
-        Ok(())
+        Ok(id_map)
     }
+}
+
+/// Get the GUID from a Telegram msg
+pub fn ser_tg_msg_id(msg: &Message) -> Vec<u8> {
+    let chat_id = msg.chat.id.0;
+    let msg_id = msg.id.0 as i64;
+    [chat_id.to_be_bytes(), msg_id.to_be_bytes()].concat()
+}
+
+/// Extract the msg ID and chat ID from a Telegram msg GUID
+pub fn de_tg_msg_id(id: &[u8]) -> (i64, i32) {
+    assert_eq!(id.len(), 16);
+    let chat_id = i64::from_be_bytes(id[..8].try_into().unwrap());
+    let msg_id = i64::from_be_bytes(id[8..].try_into().unwrap()) as i32;
+    (chat_id, msg_id)
 }
 
 fn clean_body(body: &str) -> Result<String> {

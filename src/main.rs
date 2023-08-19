@@ -4,6 +4,7 @@
 mod as2;
 mod cli;
 mod con;
+mod db;
 mod pro;
 mod query;
 mod utils;
@@ -11,13 +12,13 @@ mod utils;
 use anyhow::Result;
 use clap::Parser;
 use reqwest::Url;
-use serde::{Deserialize, Serialize};
-use tokio::fs;
+use rusqlite::Connection;
 use tokio::time::{self, Duration};
 
 use crate::as2::Page;
 use crate::cli::{Cli, CliInput, CliOutput};
 use crate::con::{Con, TgCon};
+use crate::db::{DbConn, State};
 use crate::pro::{Pro, UriPro};
 use crate::query::query_outbox_url;
 use crate::utils::int_id;
@@ -28,29 +29,35 @@ fn main() -> Result<()> {
     let mut cli = Cli::parse();
     cli.clean()?;
 
-    let ctx = Ctx { cli };
+    let conn = Connection::open(&cli.db_file)?;
+    let db = DbConn::new(conn);
+
+    let ctx = Ctx { cli, db };
     run(&ctx)?;
     Ok(())
 }
 
 struct Ctx {
     cli: Cli,
+    db: DbConn,
 }
 
 #[tokio::main]
 async fn run(ctx: &Ctx) -> Result<()> {
     let cli = &ctx.cli;
-    let init_state = match ctx.cli.file.as_ref() {
-        None => State::default(),
-        Some(path) => load_state(path).await.unwrap_or(State::default()),
+    let db = &ctx.db;
+    db.init().await?;
+
+    let init_state = if let Some(&min_id) = cli.min_id.as_ref() {
+        State::new(min_id)
+    } else {
+        db.load_state().await?.unwrap_or(State::default())
     };
 
     let mut state = init_state;
     loop {
         state = run_round(ctx, state).await?;
-        if let Some(path) = cli.file.as_ref() {
-            save_state(path, &state).await?;
-        }
+        db.save_state(state.clone()).await?;
 
         if let Some(interval) = cli.loop_interval {
             time::sleep(Duration::from_secs(interval)).await;
@@ -66,7 +73,7 @@ async fn run_round(ctx: &Ctx, state: State) -> Result<State> {
 
     let min_id = state.min_id;
     // Whether to fast forward to the latest post without sending.
-    // Use the mode go get the min_id that ignores all previous posts.
+    // Use the mode to get the `min_id` that ignores all previous posts.
     let ff_latest = min_id < 0;
     let uri = match ctx.cli.input.as_ref() {
         None | Some(CliInput::Stdin) => r"stdio://in".to_owned(),
@@ -104,7 +111,7 @@ async fn run_round(ctx: &Ctx, state: State) -> Result<State> {
     loop {
         let page = pro.fetch().await?;
         let post_len = page.ordered_items.len();
-        if post_len == 0 || ctx.cli.no_follow_paging {
+        if post_len == 0 {
             break;
         }
 
@@ -118,6 +125,10 @@ async fn run_round(ctx: &Ctx, state: State) -> Result<State> {
         let iid = int_id(page.ordered_items.first().unwrap().id.as_ref())?;
         consume(ctx, page).await?;
         next_min_id = iid;
+
+        if ctx.cli.no_follow_paging {
+            break;
+        }
     }
 
     log::info!("Finished running a round with min_id {next_min_id}");
@@ -137,39 +148,11 @@ async fn consume(ctx: &Ctx, page: Page) -> Result<()> {
         Some(CliOutput::TgSend) => {
             let post_len = page.ordered_items.len();
             let con = TgCon::new(ctx.cli.tg_chan.clone().unwrap());
-            con.send_page(page).await?;
+            // TODO: Smarter way to pass the db and the id map
+            let id_map = con.send_page(&ctx.db, page).await?;
+            ctx.db.save_id_map(id_map).await?;
             log::info!("Sent {post_len} posts to the Telegram channel");
         }
     }
     Ok(())
-}
-
-async fn load_state(path: &str) -> Result<State> {
-    let buf = fs::read(path).await?;
-    let state: State = serde_json::from_slice(&buf)?;
-    Ok(state)
-}
-
-async fn save_state(path: &str, state: &State) -> Result<()> {
-    let buf = serde_json::to_vec(state)?;
-    fs::write(path, buf).await?;
-    Ok(())
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-struct State {
-    #[serde(default = "min_id_default")]
-    min_id: i64,
-}
-
-impl Default for State {
-    fn default() -> Self {
-        Self {
-            min_id: min_id_default(),
-        }
-    }
-}
-
-fn min_id_default() -> i64 {
-    -1
 }
