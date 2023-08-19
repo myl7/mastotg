@@ -1,5 +1,6 @@
 [Unit]
 Description=mastotg round timer
+Requires=network.target network-online.target
 
 [Timer]
 # Run every 5 minutes. Modify as needed.
