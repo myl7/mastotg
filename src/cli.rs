@@ -34,14 +34,12 @@ pub struct Cli {
     /// Path to the JSON file to persist states.
     /// If not specified, do not write to a file.
     /// Then users should use the log to trace the states and pass them manually.
-    // TODO: Save the states
     #[clap(short, long)]
     pub file: Option<String>,
     /// Use builtin loop runner to run the program every fixed interval. Unit: Seconds.
     #[clap(long)]
     pub loop_interval: Option<u64>,
     /// Minimum integer ID of the posts to fetch. The newer posts have larger IDs.
-    // TODO: Proper way to ignore all previous posts
     /// If not specified or set to < 0, ignore all previous posts.
     /// If set to 0, fetch all existing posts.
     /// The stdin input is not affected.
@@ -58,7 +56,6 @@ pub struct Cli {
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 pub enum CliInput {
     /// From the stdin (default)
-    // TODO: From a file
     Stdin,
     /// Fetch from the outbox JSON URL
     Fetch,

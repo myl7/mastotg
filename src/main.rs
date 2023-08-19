@@ -65,6 +65,9 @@ async fn run_round(ctx: &Ctx, state: State) -> Result<State> {
     log::debug!("Starts to run a round");
 
     let min_id = state.min_id;
+    // Whether to fast forward to the latest post without sending.
+    // Use the mode go get the min_id that ignores all previous posts.
+    let ff_latest = min_id < 0;
     let uri = match ctx.cli.input.as_ref() {
         None | Some(CliInput::Stdin) => r"stdio://in".to_owned(),
         input => {
@@ -77,7 +80,7 @@ async fn run_round(ctx: &Ctx, state: State) -> Result<State> {
                 }
                 _ => unreachable!(),
             };
-            let id_range_query = if min_id >= 0 {
+            let id_range_query = if !ff_latest {
                 Some(("min_id", min_id.to_string()))
             } else {
                 None
@@ -104,6 +107,13 @@ async fn run_round(ctx: &Ctx, state: State) -> Result<State> {
         if post_len == 0 || ctx.cli.no_follow_paging {
             break;
         }
+
+        if ff_latest {
+            next_min_id = int_id(page.ordered_items.first().unwrap().id.as_ref())?;
+            log::info!("Ignore from the latest min_id {next_min_id}");
+            break;
+        }
+
         log::info!("Fetched {post_len} posts from the page");
         let iid = int_id(page.ordered_items.first().unwrap().id.as_ref())?;
         consume(ctx, page).await?;
