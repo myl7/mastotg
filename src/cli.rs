@@ -33,7 +33,7 @@ pub struct Cli {
     pub tg_chan: Option<String>,
     /// Path to the JSON file to persist states.
     /// If not specified, do not write to a file.
-    /// Users should use the log to trace the states and pass them manually.
+    /// Then users should use the log to trace the states and pass them manually.
     // TODO: Save the states
     #[clap(short, long)]
     pub file: Option<String>,
@@ -41,12 +41,13 @@ pub struct Cli {
     #[clap(long)]
     pub loop_interval: Option<u64>,
     /// Minimum integer ID of the posts to fetch. The newer posts have larger IDs.
+    // TODO: Proper way to ignore all previous posts
     /// If not specified or set to < 0, ignore all previous posts.
     /// If set to 0, fetch all existing posts.
     /// The stdin input is not affected.
     /// This overrides the states given by `--file`.
-    #[clap(short, long, default_value = "-1")]
-    pub min_id: i64,
+    #[clap(short, long)]
+    pub min_id: Option<i64>,
     /// The program follows the paging link `prev` to fetch more pending posts.
     /// Set this flag to disable the behavior.
     #[clap(long)]

@@ -23,7 +23,7 @@ reqwest = { version = "0.11.18", features = ["json"] }
 clap = { version = "4.3.19", features = ["derive"] }
 regex = "1.9.1"
 teloxide = "0.12.2"
-tokio = { version = "1.29.1", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1.29.1", features = ["macros", "rt-multi-thread", "fs"] }
 env_logger = "0.10.0"
 log = "0.4.19"
 quick-xml = "0.30.0"

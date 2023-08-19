@@ -11,6 +11,8 @@ mod utils;
 use anyhow::Result;
 use clap::Parser;
 use reqwest::Url;
+use serde::{Deserialize, Serialize};
+use tokio::fs;
 use tokio::time::{self, Duration};
 
 use crate::as2::Page;
@@ -26,33 +28,43 @@ fn main() -> Result<()> {
     let mut cli = Cli::parse();
     cli.clean()?;
 
-    let ctx = Ctx { cli: Box::new(cli) };
+    let ctx = Ctx { cli };
     run(&ctx)?;
     Ok(())
 }
 
 struct Ctx {
-    cli: Box<Cli>,
+    cli: Cli,
 }
 
 #[tokio::main]
 async fn run(ctx: &Ctx) -> Result<()> {
     let cli = &ctx.cli;
-    if let Some(interval) = cli.loop_interval {
-        let mut min_id = cli.min_id;
-        loop {
-            min_id = run_round(ctx, min_id).await?;
-            time::sleep(Duration::from_secs(interval)).await;
+    let init_state = match ctx.cli.file.as_ref() {
+        None => State::default(),
+        Some(path) => load_state(path).await.unwrap_or(State::default()),
+    };
+
+    let mut state = init_state;
+    loop {
+        state = run_round(ctx, state).await?;
+        if let Some(path) = cli.file.as_ref() {
+            save_state(path, &state).await?;
         }
-    } else {
-        run_round(ctx, cli.min_id).await?;
+
+        if let Some(interval) = cli.loop_interval {
+            time::sleep(Duration::from_secs(interval)).await;
+        } else {
+            break;
+        }
     }
     Ok(())
 }
 
-async fn run_round(ctx: &Ctx, min_id: i64) -> Result<i64> {
+async fn run_round(ctx: &Ctx, state: State) -> Result<State> {
     log::debug!("Starts to run a round");
 
+    let min_id = state.min_id;
     let uri = match ctx.cli.input.as_ref() {
         None | Some(CliInput::Stdin) => r"stdio://in".to_owned(),
         input => {
@@ -99,7 +111,9 @@ async fn run_round(ctx: &Ctx, min_id: i64) -> Result<i64> {
     }
 
     log::info!("Finished running a round with min_id {next_min_id}");
-    Ok(next_min_id)
+    Ok(State {
+        min_id: next_min_id,
+    })
 }
 
 async fn consume(ctx: &Ctx, page: Page) -> Result<()> {
@@ -118,4 +132,34 @@ async fn consume(ctx: &Ctx, page: Page) -> Result<()> {
         }
     }
     Ok(())
+}
+
+async fn load_state(path: &str) -> Result<State> {
+    let buf = fs::read(path).await?;
+    let state: State = serde_json::from_slice(&buf)?;
+    Ok(state)
+}
+
+async fn save_state(path: &str, state: &State) -> Result<()> {
+    let buf = serde_json::to_vec(state)?;
+    fs::write(path, buf).await?;
+    Ok(())
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+struct State {
+    #[serde(default = "min_id_default")]
+    min_id: i64,
+}
+
+impl Default for State {
+    fn default() -> Self {
+        Self {
+            min_id: min_id_default(),
+        }
+    }
+}
+
+fn min_id_default() -> i64 {
+    -1
 }
