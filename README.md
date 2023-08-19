@@ -2,7 +2,7 @@
 
 Forward posts from Mastodon to Telegram channels
 
-Read from Mastodon official public user RSS, and write to Telegram channel via bot API
+Read from Mastodon ActivityPub outbox JSON, and write to Telegram channel via bot API
 
 Media attachments are our main concern. We support:
 
