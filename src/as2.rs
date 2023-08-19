@@ -18,7 +18,7 @@ use serde_with::SerializeDisplay;
 
 /// Page of the outbox of a user.
 /// Many unused fields are ignored.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Page {
     /// Always includes "https://www.w3.org/ns/activitystreams"
@@ -44,7 +44,7 @@ pub struct Page {
 
 /// Activity of a status. Only accept `Create`.
 /// Many unused fields are ignored.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Create {
     /// GUID of the activity.
@@ -57,7 +57,7 @@ pub struct Create {
 }
 
 /// `Note` in the spec
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Post {
     /// GUID of the post
@@ -94,7 +94,7 @@ pub struct Post {
 }
 
 /// Inherits all props from `Object`
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Tag {
     /// Always "Hashtag"
@@ -106,7 +106,7 @@ pub struct Tag {
 
 /// Attachment of a post. Only accept `Document`.
 /// See [`Post`] for the limitations of Mastodon.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Document {
     /// Always "Document"
@@ -210,6 +210,12 @@ pub enum Context {
 impl fmt::Display for Context {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", AS2_SCHEMA)
+    }
+}
+
+impl Clone for Context {
+    fn clone(&self) -> Self {
+        Self::Str(AS2_SCHEMA.to_owned())
     }
 }
 

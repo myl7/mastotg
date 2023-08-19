@@ -3,6 +3,8 @@
 
 //! Post consumers
 
+use std::collections::VecDeque;
+
 use anyhow::{anyhow, bail, ensure, Result};
 use async_trait::async_trait;
 use quick_xml::events::Event;
@@ -11,6 +13,8 @@ use quick_xml::reader::Reader;
 use reqwest::Url;
 use teloxide::prelude::*;
 use teloxide::types::{InputFile, InputMedia, InputMediaPhoto, ParseMode};
+use teloxide::RequestError;
+use tokio::time;
 
 use crate::as2::{Create, Page, Post};
 
@@ -146,8 +150,24 @@ impl TgCon {
 #[async_trait]
 impl Con for TgCon {
     async fn send(&self, items: Vec<Create>) -> Result<()> {
-        for item in items.into_iter().rev() {
-            self.send_one(item).await?;
+        let mut queue: VecDeque<_> = items.into_iter().rev().collect();
+        while !queue.is_empty() {
+            let item = if let Some(x) = queue.pop_front() {
+                x
+            } else {
+                break;
+            };
+            if let Err(e) = self.send_one(item.clone()).await {
+                if let Some(req_e) = e.downcast_ref::<RequestError>() {
+                    if let RequestError::RetryAfter(du) = req_e {
+                        log::warn!("Retry after {} seconds due to flood control", du.as_secs());
+                        queue.push_front(item);
+                        time::sleep(*du).await;
+                    }
+                } else {
+                    bail!(e)
+                }
+            }
         }
         Ok(())
     }
