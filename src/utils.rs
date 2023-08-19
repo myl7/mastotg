@@ -30,3 +30,17 @@ pub fn int_id(guid: &str) -> Result<i64> {
     let int: i64 = m.get(1).unwrap().as_str().parse()?;
     Ok(int)
 }
+
+/// De a test fixture
+#[cfg(test)]
+#[macro_export]
+macro_rules! check_de {
+    ($t:ty, $fname:literal) => {{
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures")
+            .join($fname.to_owned() + ".json");
+        let s = std::fs::read(path).unwrap();
+        let res: $t = serde_json::from_slice(&s)?;
+        res
+    }};
+}

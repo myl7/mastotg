@@ -1,0 +1,31 @@
+{
+  "id": "https://social.myl.moe/users/myl/statuses/110826550717756448",
+  "type": "Note",
+  "summary": null,
+  "inReplyTo": null,
+  "published": "2023-08-03T16:09:19Z",
+  "url": "https://social.myl.moe/@myl/110826550717756448",
+  "attributedTo": "https://social.myl.moe/users/myl",
+  "to": ["https://www.w3.org/ns/activitystreams#Public"],
+  "cc": ["https://social.myl.moe/users/myl/followers"],
+  "sensitive": false,
+  "atomUri": "https://social.myl.moe/users/myl/statuses/110826550717756448",
+  "inReplyToAtomUri": null,
+  "conversation": "tag:myl.moe,2023-08-03:objectId=271868:objectType=Conversation",
+  "content": "\u003cp\u003e哈哈哈哈，追番的乐趣原来就是这样啊੭ ᐕ)੭\u003cbr /\u003e虽然还是没有更多的信息，但是实在是名场面啊，很很的破防！\u003cbr /\u003emygo 好！\u003c/p\u003e",
+  "contentMap": {
+    "zh": "\u003cp\u003e哈哈哈哈，追番的乐趣原来就是这样啊੭ ᐕ)੭\u003cbr /\u003e虽然还是没有更多的信息，但是实在是名场面啊，很很的破防！\u003cbr /\u003emygo 好！\u003c/p\u003e"
+  },
+  "attachment": [],
+  "tag": [],
+  "replies": {
+    "id": "https://social.myl.moe/users/myl/statuses/110826550717756448/replies",
+    "type": "Collection",
+    "first": {
+      "type": "CollectionPage",
+      "next": "https://social.myl.moe/users/myl/statuses/110826550717756448/replies?min_id=110826572920061841\u0026page=true",
+      "partOf": "https://social.myl.moe/users/myl/statuses/110826550717756448/replies",
+      "items": ["https://social.myl.moe/users/myl/statuses/110826572920061841"]
+    }
+  }
+}

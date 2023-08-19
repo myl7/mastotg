@@ -223,3 +223,45 @@ pub enum CtxItem {
 
 #[derive(Deserialize)]
 pub struct CtxItemObj {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::check_de;
+
+    #[test]
+    fn test_de_page() -> Result<()> {
+        check_de!(Page, "page");
+        Ok(())
+    }
+
+    #[test]
+    fn test_de_create() -> Result<()> {
+        check_de!(Create, "create");
+        Ok(())
+    }
+
+    #[test]
+    fn test_de_post() -> Result<()> {
+        check_de!(Post, "post_text");
+        Ok(())
+    }
+
+    #[test]
+    fn test_de_post_link() -> Result<()> {
+        check_de!(Post, "post_link");
+        Ok(())
+    }
+
+    #[test]
+    fn test_de_tag() -> Result<()> {
+        check_de!(Post, "post_tag");
+        Ok(())
+    }
+
+    #[test]
+    fn test_de_multi_grouped_images() -> Result<()> {
+        check_de!(Post, "post_multi_grouped_images");
+        Ok(())
+    }
+}

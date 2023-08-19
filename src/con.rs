@@ -42,7 +42,8 @@ impl TgCon {
 }
 
 impl TgCon {
-    async fn send_one(&self, act: &Create) -> Result<()> {
+    async fn send_one(&self, mut act: Create) -> Result<()> {
+        act.object.content = clean_body(&act.object.content)?;
         let post = &act.object;
 
         if post.attachment.is_empty() {
@@ -145,9 +146,8 @@ impl TgCon {
 #[async_trait]
 impl Con for TgCon {
     async fn send(&self, items: Vec<Create>) -> Result<()> {
-        for mut item in items.into_iter().rev() {
-            item.object.content = clean_body(&item.object.content)?;
-            self.send_one(&item).await?;
+        for item in items.into_iter().rev() {
+            self.send_one(item).await?;
         }
         Ok(())
     }
@@ -222,4 +222,48 @@ fn clean_body(body: &str) -> Result<String> {
         }
     }
     Ok(texts)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::check_de;
+
+    #[test]
+    fn test_body_text() -> Result<()> {
+        let post = check_de!(Post, "post_text");
+        let body = clean_body(&post.content)?;
+        let body_expected = concat!(
+            "哈哈哈哈，追番的乐趣原来就是这样啊੭ ᐕ)੭\n",
+            "虽然还是没有更多的信息，但是实在是名场面啊，很很的破防！\n",
+            "mygo 好！"
+        );
+        assert_eq!(body, body_expected);
+        Ok(())
+    }
+
+    #[test]
+    fn test_body_link() -> Result<()> {
+        let post = check_de!(Post, "post_link");
+        let body = clean_body(&post.content)?;
+        let body_expected = concat!(
+            r#"已经 deploy <a href="https://github.com/myl7/mastotg">https://github.com/myl7/mastotg</a> 了，应该是 generally available 了"#,
+            "\n",
+            "功能的话还差个 reply 关系（这条作为样例试试再看怎么处理"
+        );
+        assert_eq!(body, body_expected);
+        Ok(())
+    }
+
+    #[test]
+    fn test_body_tag() -> Result<()> {
+        let post = check_de!(Post, "post_tag");
+        let body = clean_body(&post.content)?;
+        let body_expected = concat!(
+            "另：信息已经不重要了，具体的前因后果就等 ave mujica 里讲吧，或许可以 mygo 结尾留个引子？\n",
+            "#mygo"
+        );
+        assert_eq!(body, body_expected);
+        Ok(())
+    }
 }

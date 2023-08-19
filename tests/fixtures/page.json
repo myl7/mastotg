@@ -1,0 +1,23 @@
+{
+  "@context": [
+    "https://www.w3.org/ns/activitystreams",
+    {
+      "ostatus": "http://ostatus.org#",
+      "atomUri": "ostatus:atomUri",
+      "inReplyToAtomUri": "ostatus:inReplyToAtomUri",
+      "conversation": "ostatus:conversation",
+      "sensitive": "as:sensitive",
+      "toot": "http://joinmastodon.org/ns#",
+      "votersCount": "toot:votersCount",
+      "Hashtag": "as:Hashtag",
+      "blurhash": "toot:blurhash",
+      "focalPoint": { "@container": "@list", "@id": "toot:focalPoint" }
+    }
+  ],
+  "id": "https://social.myl.moe/users/myl/outbox?page=true",
+  "type": "OrderedCollectionPage",
+  "next": "https://social.myl.moe/users/myl/outbox?max_id=110826550717756448\u0026page=true",
+  "prev": "https://social.myl.moe/users/myl/outbox?min_id=110907981216736603\u0026page=true",
+  "partOf": "https://social.myl.moe/users/myl/outbox",
+  "orderedItems": []
+}

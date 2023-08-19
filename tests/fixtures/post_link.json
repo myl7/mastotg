@@ -1,0 +1,31 @@
+{
+  "id": "https://social.myl.moe/users/myl/statuses/110801623418139658",
+  "type": "Note",
+  "summary": null,
+  "inReplyTo": "https://social.myl.moe/users/myl/statuses/110801591904117964",
+  "published": "2023-07-30T06:29:59Z",
+  "url": "https://social.myl.moe/@myl/110801623418139658",
+  "attributedTo": "https://social.myl.moe/users/myl",
+  "to": ["https://www.w3.org/ns/activitystreams#Public"],
+  "cc": ["https://social.myl.moe/users/myl/followers"],
+  "sensitive": false,
+  "atomUri": "https://social.myl.moe/users/myl/statuses/110801623418139658",
+  "inReplyToAtomUri": "https://social.myl.moe/users/myl/statuses/110801591904117964",
+  "conversation": "tag:myl.moe,2023-07-30:objectId=255742:objectType=Conversation",
+  "content": "\u003cp\u003e已经 deploy \u003ca href=\"https://github.com/myl7/mastotg\" target=\"_blank\" rel=\"nofollow noopener noreferrer\"\u003e\u003cspan class=\"invisible\"\u003ehttps://\u003c/span\u003e\u003cspan class=\"\"\u003egithub.com/myl7/mastotg\u003c/span\u003e\u003cspan class=\"invisible\"\u003e\u003c/span\u003e\u003c/a\u003e 了，应该是 generally available 了\u003cbr /\u003e功能的话还差个 reply 关系（这条作为样例试试再看怎么处理\u003c/p\u003e",
+  "contentMap": {
+    "en": "\u003cp\u003e已经 deploy \u003ca href=\"https://github.com/myl7/mastotg\" target=\"_blank\" rel=\"nofollow noopener noreferrer\"\u003e\u003cspan class=\"invisible\"\u003ehttps://\u003c/span\u003e\u003cspan class=\"\"\u003egithub.com/myl7/mastotg\u003c/span\u003e\u003cspan class=\"invisible\"\u003e\u003c/span\u003e\u003c/a\u003e 了，应该是 generally available 了\u003cbr /\u003e功能的话还差个 reply 关系（这条作为样例试试再看怎么处理\u003c/p\u003e"
+  },
+  "attachment": [],
+  "tag": [],
+  "replies": {
+    "id": "https://social.myl.moe/users/myl/statuses/110801623418139658/replies",
+    "type": "Collection",
+    "first": {
+      "type": "CollectionPage",
+      "next": "https://social.myl.moe/users/myl/statuses/110801623418139658/replies?only_other_accounts=true\u0026page=true",
+      "partOf": "https://social.myl.moe/users/myl/statuses/110801623418139658/replies",
+      "items": []
+    }
+  }
+}

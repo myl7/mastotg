@@ -1,0 +1,31 @@
+{
+  "id": "https://social.myl.moe/users/myl/statuses/110907981216736603",
+  "type": "Note",
+  "summary": null,
+  "inReplyTo": "https://social.myl.moe/users/myl/statuses/110907882860301530",
+  "published": "2023-08-18T01:18:10Z",
+  "url": "https://social.myl.moe/@myl/110907981216736603",
+  "attributedTo": "https://social.myl.moe/users/myl",
+  "to": ["https://www.w3.org/ns/activitystreams#Public"],
+  "cc": ["https://social.myl.moe/users/myl/followers"],
+  "sensitive": false,
+  "atomUri": "https://social.myl.moe/users/myl/statuses/110907981216736603",
+  "inReplyToAtomUri": "https://social.myl.moe/users/myl/statuses/110907882860301530",
+  "conversation": "tag:myl.moe,2023-08-18:objectId=271951:objectType=Conversation",
+  "content": "\u003cp\u003e另：信息已经不重要了，具体的前因后果就等 ave mujica 里讲吧，或许可以 mygo 结尾留个引子？\u003cbr /\u003e\u003ca href=\"https://social.myl.moe/tags/mygo\" class=\"mention hashtag\" rel=\"tag\"\u003e#\u003cspan\u003emygo\u003c/span\u003e\u003c/a\u003e\u003c/p\u003e",
+  "contentMap": {
+    "zh": "\u003cp\u003e另：信息已经不重要了，具体的前因后果就等 ave mujica 里讲吧，或许可以 mygo 结尾留个引子？\u003cbr /\u003e\u003ca href=\"https://social.myl.moe/tags/mygo\" class=\"mention hashtag\" rel=\"tag\"\u003e#\u003cspan\u003emygo\u003c/span\u003e\u003c/a\u003e\u003c/p\u003e"
+  },
+  "attachment": [],
+  "tag": [{ "type": "Hashtag", "href": "https://social.myl.moe/tags/mygo", "name": "#mygo" }],
+  "replies": {
+    "id": "https://social.myl.moe/users/myl/statuses/110907981216736603/replies",
+    "type": "Collection",
+    "first": {
+      "type": "CollectionPage",
+      "next": "https://social.myl.moe/users/myl/statuses/110907981216736603/replies?only_other_accounts=true\u0026page=true",
+      "partOf": "https://social.myl.moe/users/myl/statuses/110907981216736603/replies",
+      "items": []
+    }
+  }
+}
