@@ -11,8 +11,7 @@ license = "Apache-2.0"
 keywords = [
   "mastodon",
   "telegram",
-  "rss",
-  "bot",
+  "activitypub",
   "cross-platform",
   "social-media",
 ]
