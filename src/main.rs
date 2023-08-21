@@ -3,7 +3,7 @@
 
 mod as2;
 mod cli;
-mod con;
+mod cons;
 mod db;
 mod pro;
 mod query;
@@ -17,7 +17,7 @@ use tokio::time::{self, Duration};
 
 use crate::as2::Page;
 use crate::cli::{Cli, CliInput, CliOutput};
-use crate::con::{Con, TgCon};
+use crate::cons::{Con, TgCon};
 use crate::db::{migration, DbConn, State};
 use crate::pro::{Pro, UriPro};
 use crate::query::query_outbox_url;

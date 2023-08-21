@@ -11,7 +11,7 @@ use anyhow::Result;
 use rusqlite::{Connection, OptionalExtension};
 use tokio::task;
 
-use crate::con::IdMap;
+use crate::cons::IdMap;
 
 pub mod migration {
     refinery::embed_migrations!();
