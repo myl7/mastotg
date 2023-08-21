@@ -87,15 +87,28 @@ async fn run_round(ctx: &Ctx, state: State) -> Result<State> {
                 }
                 _ => unreachable!(),
             };
-            let id_range_query = if !ff_latest {
+            let min_id_query = if !ff_latest {
                 Some(("min_id", min_id.to_string()))
             } else {
                 None
             };
+            let max_id_query = match ctx.cli.max_id {
+                Some(max_id) => {
+                    if max_id >= 0 {
+                        Some(("max_id", max_id.to_string()))
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
+            };
             let mut u = Url::parse(&base_url)?;
             {
                 let mut q = u.query_pairs_mut();
-                if let Some((k, v)) = id_range_query {
+                if let Some((k, v)) = min_id_query {
+                    q.append_pair(k, &v);
+                }
+                if let Some((k, v)) = max_id_query {
                     q.append_pair(k, &v);
                 }
                 q.append_pair("page", "true");

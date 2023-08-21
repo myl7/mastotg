@@ -42,8 +42,14 @@ pub struct Cli {
     /// If set to 0, fetch all existing posts.
     /// The stdin input is not affected.
     /// This overrides the states given by `--file`.
-    #[clap(short, long)]
+    #[clap(short, long, default_value = "-1")]
     pub min_id: Option<i64>,
+    /// Maximum integer ID of the posts to fetch.
+    /// If specified, this will prevent processing any newer posts, so should only be used for testing.
+    /// The stdin input is not affected.
+    /// This overrides the states given by `--file`.
+    #[clap(long, default_value = "-1")]
+    pub max_id: Option<i64>,
     /// The program follows the paging link `prev` to fetch more pending posts.
     /// Set this flag to disable the behavior.
     #[clap(long)]
