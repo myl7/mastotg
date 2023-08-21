@@ -17,6 +17,17 @@ pub struct DbConn {
     conn: Arc<Mutex<Connection>>,
 }
 
+macro_rules! conn_blocking {
+    ($conn:expr, $var:ident, $b:block) => {{
+        let conn = $conn.clone();
+        task::spawn_blocking(move || {
+            let $var = conn.lock().unwrap();
+            $b
+        })
+        .await??
+    }};
+}
+
 impl DbConn {
     pub fn new(conn: Connection) -> Self {
         Self {
@@ -35,54 +46,41 @@ impl DbConn {
     }
 
     pub async fn save_state(&self, state: State) -> Result<()> {
-        let conn = self.conn.clone();
-        task::spawn_blocking(move || {
-            let conn = conn.lock().unwrap();
+        conn_blocking!(self.conn, conn, {
             conn.execute(SQL_REPLACE_STATE, (state.min_id,))?;
             anyhow::Ok(())
-        })
-        .await??;
+        });
         Ok(())
     }
 
     pub async fn load_state(&self) -> Result<Option<State>> {
-        let conn = self.conn.clone();
-        let state = task::spawn_blocking(move || {
-            let conn = conn.lock().unwrap();
+        let state = conn_blocking!(self.conn, conn, {
             conn.query_row(SQL_SELECT_STATE, (), |row| {
                 Ok(State {
                     min_id: row.get(0)?,
                 })
             })
             .optional()
-        })
-        .await??;
+        });
         Ok(state)
     }
 
     pub async fn save_id_map(&self, id_map: IdMap) -> Result<()> {
-        let conn = self.conn.clone();
-        task::spawn_blocking(move || {
-            let conn = conn.lock().unwrap();
+        conn_blocking!(self.conn, conn, {
             let mut stmt = conn.prepare_cached(SQL_INSERT_ID_PAIR)?;
             for (id, tg_id) in id_map.iter() {
                 stmt.execute((id, tg_id))?;
             }
             anyhow::Ok(())
-        })
-        .await??;
+        });
         Ok(())
     }
 
     pub async fn query_id_map(&self, id: String) -> Result<Option<Vec<u8>>> {
-        let conn = self.conn.clone();
-        let id = id.to_owned();
-        let tg_id: Option<Vec<u8>> = task::spawn_blocking(move || {
-            let conn = conn.lock().unwrap();
+        let tg_id: Option<Vec<u8>> = conn_blocking!(self.conn, conn, {
             conn.query_row(SQL_SELECT_ID_PAIR, (&id,), |row| row.get(0))
                 .optional()
-        })
-        .await??;
+        });
         Ok(tg_id)
     }
 }
@@ -114,7 +112,7 @@ CREATE TABLE IF NOT EXISTS state (
     min_id INTEGER NOT NULL
 );
 "#;
-const SQL_REPLACE_STATE: &str = r#"INSERT OR REPLACE INTO state (id, min_id) VALUES (1, ?1)"#;
-const SQL_SELECT_STATE: &str = r#"SELECT min_id FROM state WHERE id = 1"#;
+const SQL_REPLACE_STATE: &str = r#"INSERT OR REPLACE INTO state (pk, min_id) VALUES (1, ?1)"#;
+const SQL_SELECT_STATE: &str = r#"SELECT min_id FROM state WHERE pk = 1"#;
 const SQL_INSERT_ID_PAIR: &str = r#"INSERT INTO id_map (id, tg_id) VALUES (?1, ?2)"#;
 const SQL_SELECT_ID_PAIR: &str = r#"SELECT tg_id FROM id_map WHERE id = ?1"#;
