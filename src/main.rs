@@ -18,7 +18,7 @@ use tokio::time::{self, Duration};
 use crate::as2::Page;
 use crate::cli::{Cli, CliInput, CliOutput};
 use crate::con::{Con, TgCon};
-use crate::db::{DbConn, State};
+use crate::db::{migration, DbConn, State};
 use crate::pro::{Pro, UriPro};
 use crate::query::query_outbox_url;
 use crate::utils::int_id;
@@ -29,7 +29,8 @@ fn main() -> Result<()> {
     let mut cli = Cli::parse();
     cli.clean()?;
 
-    let conn = Connection::open(&cli.db_file)?;
+    let mut conn = Connection::open(&cli.db_file)?;
+    init_db(&mut conn)?;
     let db = DbConn::new(conn);
 
     let ctx = Ctx { cli, db };
@@ -46,7 +47,6 @@ struct Ctx {
 async fn run(ctx: &Ctx) -> Result<()> {
     let cli = &ctx.cli;
     let db = &ctx.db;
-    db.init().await?;
 
     let init_state = if let Some(&min_id) = cli.min_id.as_ref() {
         State::new(min_id)
@@ -148,6 +148,22 @@ async fn run_round(ctx: &Ctx, state: State) -> Result<State> {
     Ok(State {
         min_id: next_min_id,
     })
+}
+
+fn init_db(conn: &mut Connection) -> Result<()> {
+    let report = migration::migrations::runner().run(conn)?;
+    let migs = report.applied_migrations();
+    if !migs.is_empty() {
+        let s = migs
+            .iter()
+            .map(|m| format!("{m}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        log::info!("Applied migrations: {s}");
+    } else {
+        log::debug!("No migrations applied");
+    }
+    Ok(())
 }
 
 async fn consume(ctx: &Ctx, page: Page) -> Result<()> {

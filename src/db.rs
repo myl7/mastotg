@@ -13,6 +13,10 @@ use tokio::task;
 
 use crate::con::IdMap;
 
+pub mod migration {
+    refinery::embed_migrations!();
+}
+
 pub struct DbConn {
     conn: Arc<Mutex<Connection>>,
 }
@@ -33,16 +37,6 @@ impl DbConn {
         Self {
             conn: Arc::new(Mutex::new(conn)),
         }
-    }
-
-    pub async fn init(&self) -> Result<()> {
-        let conn = self.conn.clone();
-        task::spawn_blocking(move || {
-            let conn = conn.lock().unwrap();
-            conn.execute_batch(SQL_CREATE_TABLES)
-        })
-        .await??;
-        Ok(())
     }
 
     pub async fn save_state(&self, state: State) -> Result<()> {
@@ -102,16 +96,6 @@ impl Default for State {
     }
 }
 
-const SQL_CREATE_TABLES: &str = r#"
-CREATE TABLE IF NOT EXISTS id_map (
-    id TEXT PRIMARY KEY,
-    tg_id BLOB UNIQUE NOT NULL
-);
-CREATE TABLE IF NOT EXISTS state (
-    id INTEGER PRIMARY KEY,
-    min_id INTEGER NOT NULL
-);
-"#;
 const SQL_REPLACE_STATE: &str = r#"INSERT OR REPLACE INTO state (pk, min_id) VALUES (1, ?1)"#;
 const SQL_SELECT_STATE: &str = r#"SELECT min_id FROM state WHERE pk = 1"#;
 const SQL_INSERT_ID_PAIR: &str = r#"INSERT INTO id_map (id, tg_id) VALUES (?1, ?2)"#;
