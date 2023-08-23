@@ -176,9 +176,8 @@ async fn consume(ctx: &Ctx, page: Page) -> Result<()> {
         }
         Some(CliOutput::TgSend) => {
             let post_len = page.ordered_items.len();
-            let con = TgCon::new(ctx.cli.tg_chan.clone().unwrap());
-            // TODO: Smarter way to pass the db and the id map
-            let id_map = con.send_page(&ctx.db, page).await?;
+            let con = TgCon::new(ctx.cli.tg_chan.clone().unwrap(), ctx.db.clone());
+            let id_map = con.send_page(page).await?;
             ctx.db.save_id_map(id_map).await?;
             log::info!("Sent {post_len} posts to the Telegram channel");
         }

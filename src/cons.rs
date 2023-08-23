@@ -26,30 +26,32 @@ pub type IdMap = HashMap<String, Vec<u8>>;
 pub trait Con {
     /// Send posts in the form of activities.
     /// Not send one-by-one directly in case collection-level cleaning is required.
-    async fn send(&self, db: &DbConn, items: Vec<Create>) -> Result<IdMap>;
+    async fn send(&self, items: Vec<Create>) -> Result<IdMap>;
 
     /// Send a page of posts
-    async fn send_page(&self, db: &DbConn, page: Page) -> Result<IdMap> {
-        self.send(db, page.ordered_items).await
+    async fn send_page(&self, page: Page) -> Result<IdMap> {
+        self.send(page.ordered_items).await
     }
 }
 
 pub struct TgCon {
     bot: Bot,
     tg_chan: String,
+    db: DbConn,
 }
 
 impl TgCon {
-    pub fn new(tg_chan: String) -> Self {
+    pub fn new(tg_chan: String, db: DbConn) -> Self {
         Self {
             bot: Bot::from_env(),
             tg_chan,
+            db,
         }
     }
 }
 
 macro_rules! handle_reply {
-    ($send:ident, $db:ident, $id_map:ident, $post:ident) => {
+    ($send:ident, $db:expr, $id_map:ident, $post:ident) => {
         if let Some(id) = $post.in_reply_to.as_ref() {
             let mut tg_id_opt = $id_map.get(id).cloned();
             if let None = tg_id_opt {
@@ -66,12 +68,12 @@ macro_rules! handle_reply {
 }
 
 impl TgCon {
-    async fn send_one(&self, db: &DbConn, id_map: &IdMap, mut act: Create) -> Result<Vec<u8>> {
+    async fn send_one(&self, id_map: &IdMap, mut act: Create) -> Result<Vec<u8>> {
         act.object.content = clean_body(&act.object.content)?;
         let post = &act.object;
 
         if post.attachment.is_empty() {
-            let id = self.send_text(db, id_map, post).await?;
+            let id = self.send_text(id_map, post).await?;
             return Ok(id);
         }
 
@@ -82,7 +84,7 @@ impl TgCon {
                     .all(|att| att.media_type.starts_with("image/")),
                 "media type not all images for multiple media"
             );
-            let id = self.send_multi_grouped_images(db, id_map, post).await?;
+            let id = self.send_multi_grouped_images(id_map, post).await?;
             return Ok(id);
         }
 
@@ -92,30 +94,25 @@ impl TgCon {
             .find('/')
             .ok_or(anyhow!("invalid media type {}", att.media_type))?];
         let id = match media_type {
-            "image" => self.send_image(db, id_map, post).await?,
-            "video" => self.send_video(db, id_map, post).await?,
-            "audio" => self.send_audio(db, id_map, post).await?,
+            "image" => self.send_image(id_map, post).await?,
+            "video" => self.send_video(id_map, post).await?,
+            "audio" => self.send_audio(id_map, post).await?,
             _ => bail!("unknown media type {}", att.media_type),
         };
         Ok(id)
     }
 
-    async fn send_text(&self, db: &DbConn, id_map: &IdMap, post: &Post) -> Result<Vec<u8>> {
+    async fn send_text(&self, id_map: &IdMap, post: &Post) -> Result<Vec<u8>> {
         let mut send = self
             .bot
             .send_message(self.tg_chan.clone(), &post.content)
             .parse_mode(ParseMode::Html);
-        handle_reply!(send, db, id_map, post);
+        handle_reply!(send, self.db, id_map, post);
         let msg = send.await?;
         Ok(ser_tg_msg_id(&msg))
     }
 
-    async fn send_multi_grouped_images(
-        &self,
-        db: &DbConn,
-        id_map: &IdMap,
-        post: &Post,
-    ) -> Result<Vec<u8>> {
+    async fn send_multi_grouped_images(&self, id_map: &IdMap, post: &Post) -> Result<Vec<u8>> {
         let photos = post
             .attachment
             .iter()
@@ -132,43 +129,43 @@ impl TgCon {
             })
             .collect::<Result<Vec<_>>>()?;
         let mut send = self.bot.send_media_group(self.tg_chan.clone(), photos);
-        handle_reply!(send, db, id_map, post);
+        handle_reply!(send, self.db, id_map, post);
         let msgs = send.await?;
         Ok(ser_tg_msg_id(&msgs[0]))
     }
 
-    async fn send_image(&self, db: &DbConn, id_map: &IdMap, post: &Post) -> Result<Vec<u8>> {
+    async fn send_image(&self, id_map: &IdMap, post: &Post) -> Result<Vec<u8>> {
         let att = &post.attachment[0];
         let mut send = self
             .bot
             .send_photo(self.tg_chan.clone(), InputFile::url(Url::parse(&att.url)?))
             .caption(post.content.clone())
             .parse_mode(ParseMode::Html);
-        handle_reply!(send, db, id_map, post);
+        handle_reply!(send, self.db, id_map, post);
         let msg = send.await?;
         Ok(ser_tg_msg_id(&msg))
     }
 
-    async fn send_video(&self, db: &DbConn, id_map: &IdMap, post: &Post) -> Result<Vec<u8>> {
+    async fn send_video(&self, id_map: &IdMap, post: &Post) -> Result<Vec<u8>> {
         let att = &post.attachment[0];
         let mut send = self
             .bot
             .send_video(self.tg_chan.clone(), InputFile::url(Url::parse(&att.url)?))
             .caption(post.content.clone())
             .parse_mode(ParseMode::Html);
-        handle_reply!(send, db, id_map, post);
+        handle_reply!(send, self.db, id_map, post);
         let msg = send.await?;
         Ok(ser_tg_msg_id(&msg))
     }
 
-    async fn send_audio(&self, db: &DbConn, id_map: &IdMap, post: &Post) -> Result<Vec<u8>> {
+    async fn send_audio(&self, id_map: &IdMap, post: &Post) -> Result<Vec<u8>> {
         let att = &post.attachment[0];
         let mut send = self
             .bot
             .send_audio(self.tg_chan.clone(), InputFile::url(Url::parse(&att.url)?))
             .caption(post.content.clone())
             .parse_mode(ParseMode::Html);
-        handle_reply!(send, db, id_map, post);
+        handle_reply!(send, self.db, id_map, post);
         let msg = send.await?;
         Ok(ser_tg_msg_id(&msg))
     }
@@ -176,7 +173,7 @@ impl TgCon {
 
 #[async_trait]
 impl Con for TgCon {
-    async fn send(&self, db: &DbConn, items: Vec<Create>) -> Result<IdMap> {
+    async fn send(&self, items: Vec<Create>) -> Result<IdMap> {
         let mut id_map = HashMap::new();
         let mut queue: VecDeque<_> = items.into_iter().rev().collect();
         while !queue.is_empty() {
@@ -186,7 +183,7 @@ impl Con for TgCon {
                 break;
             };
 
-            match self.send_one(db, &id_map, item.clone()).await {
+            match self.send_one(&id_map, item.clone()).await {
                 Err(e) => {
                     if let Some(req_e) = e.downcast_ref::<RequestError>() {
                         if let RequestError::RetryAfter(du) = req_e {

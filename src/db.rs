@@ -17,6 +17,7 @@ pub mod migration {
     refinery::embed_migrations!();
 }
 
+#[derive(Clone)]
 pub struct DbConn {
     conn: Arc<Mutex<Connection>>,
 }
