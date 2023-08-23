@@ -75,8 +75,9 @@ pub struct Post {
     // attributed_to: String,
     // to: Vec<String>,
     // cc: Vec<String>,
-    /// Extension.
-    // TODO: Can it be used for spoiler?
+    /// Extension. Used for spoilers.
+    /// The current implementation is opinionated.
+    /// Only media are spoiled and texts are never.
     #[serde(default)]
     pub sensitive: bool,
     // atom_uri: // Extension

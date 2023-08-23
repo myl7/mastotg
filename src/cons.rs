@@ -118,14 +118,16 @@ impl TgCon {
             .iter()
             .enumerate()
             .map(|(i, att)| {
-                let photo = InputMediaPhoto::new(InputFile::url(Url::parse(&att.url)?));
-                Ok(InputMedia::Photo(if i == 0 {
-                    photo
+                let mut photo = InputMediaPhoto::new(InputFile::url(Url::parse(&att.url)?));
+                if i == 0 {
+                    photo = photo
                         .caption(post.content.clone())
-                        .parse_mode(ParseMode::Html)
-                } else {
-                    photo
-                }))
+                        .parse_mode(ParseMode::Html);
+                }
+                if post.sensitive {
+                    photo = photo.spoiler();
+                }
+                Ok(InputMedia::Photo(photo))
             })
             .collect::<Result<Vec<_>>>()?;
         let mut send = self.bot.send_media_group(self.tg_chan.clone(), photos);
@@ -142,6 +144,7 @@ impl TgCon {
             .caption(post.content.clone())
             .parse_mode(ParseMode::Html);
         handle_reply!(send, self.db, id_map, post);
+        send = send.has_spoiler(post.sensitive);
         let msg = send.await?;
         Ok(ser_tg_msg_id(&msg))
     }
@@ -154,6 +157,7 @@ impl TgCon {
             .caption(post.content.clone())
             .parse_mode(ParseMode::Html);
         handle_reply!(send, self.db, id_map, post);
+        send = send.has_spoiler(post.sensitive);
         let msg = send.await?;
         Ok(ser_tg_msg_id(&msg))
     }
