@@ -8,6 +8,7 @@ ExecStart=/usr/local/bin/mastotg -i query-fetch -o tg-send -s social.myl.moe -u 
 # Put the envs here. It should not be so bad if the unit file is in mode 400.
 # For more safety, refer to LoadCredential.
 Environment=TELOXIDE_TOKEN=YOUR_TG_BOT_TOKEN
+Environment=RUST_LOG=info
 # Create a standalone user for the program to gain more safety
 #User=
 #Group=
