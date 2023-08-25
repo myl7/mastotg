@@ -48,10 +48,19 @@ async fn run(ctx: &Ctx) -> Result<()> {
     let cli = &ctx.cli;
     let db = &ctx.db;
 
-    let init_state = if let Some(&min_id) = cli.min_id.as_ref() {
-        State::new(min_id)
+    let init_state = if cli.min_id >= 0 {
+        State::new(cli.min_id)
     } else {
-        db.load_state().await?.unwrap_or(State::default())
+        db.load_state()
+            .await?
+            .map(|s| {
+                log::debug!("Loaded state min_id {} from the database", s.min_id);
+                s
+            })
+            .unwrap_or_else(|| {
+                log::debug!("No state loaded from the database");
+                State::default()
+            })
     };
 
     let mut state = init_state;
@@ -92,16 +101,7 @@ async fn run_round(ctx: &Ctx, state: State) -> Result<State> {
             } else {
                 None
             };
-            let max_id_query = match ctx.cli.max_id {
-                Some(max_id) => {
-                    if max_id >= 0 {
-                        Some(("max_id", max_id.to_string()))
-                    } else {
-                        None
-                    }
-                }
-                _ => None,
-            };
+            let max_id_query = ctx.cli.max_id.map(|id| ("max_id", id.to_string()));
             let mut u = Url::parse(&base_url)?;
             {
                 let mut q = u.query_pairs_mut();

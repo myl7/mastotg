@@ -38,18 +38,20 @@ pub struct Cli {
     #[clap(long)]
     pub loop_interval: Option<u64>,
     /// Minimum integer ID of the posts to fetch. The newer posts have larger IDs.
-    /// If not specified or set to < 0, ignore all previous posts.
+    /// If not specified, try reading from the database.
+    /// If still not specified, ignore all previous posts.
+    /// Since the application writes the database, the case should only happen once.
     /// If set to 0, fetch all existing posts.
     /// The stdin input is not affected.
     /// This overrides the states given by `--file`.
     #[clap(short, long, default_value = "-1")]
-    pub min_id: Option<i64>,
+    pub min_id: i64,
     /// Maximum integer ID of the posts to fetch.
     /// If specified, this will prevent processing any newer posts, so should only be used for testing.
     /// The stdin input is not affected.
     /// This overrides the states given by `--file`.
-    #[clap(long, default_value = "-1")]
-    pub max_id: Option<i64>,
+    #[clap(long)]
+    pub max_id: Option<u64>,
     /// The program follows the paging link `prev` to fetch more pending posts.
     /// Set this flag to disable the behavior.
     #[clap(long)]
