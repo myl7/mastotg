@@ -1,0 +1,13 @@
+[Unit]
+Description=mastotg round
+
+[Service]
+Environment='ARGS=-s social.myl.moe -u myl --tg-chan myl7s'
+# Put the bot token here with the unit file in mode 400 or in the env file
+Environment=TELOXIDE_TOKEN=YOUR_TG_BOT_TOKEN
+Environment=RUST_LOG=info
+# Override the previous defaults in the file
+EnvironmentFile=-/etc/default/mastotg
+Type=oneshot
+ExecStart=/usr/bin/mastotg -i query-fetch -o tg-send "$ARGS" -f /var/lib/mastotg/mastotg.sqlite
+User=mastotg

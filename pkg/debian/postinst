@@ -1,0 +1,17 @@
+#!/bin/sh
+set -e
+
+USER=mastotg
+HOME=/var/lib/mastotg
+
+add_user() {
+  adduser --system --home "$HOME" "$USER"
+}
+
+case "$1" in
+configure)
+  add_user
+  ;;
+esac
+
+#DEBHELPER#

@@ -17,8 +17,8 @@ keywords = [
 ]
 
 [package.metadata.deb]
-maintainer-scripts = "dist"
-systemd-units = { enable = false }
+maintainer-scripts = "pkg/debian"
+systemd-units = { unit-name = "mastotg", unit-scripts = "pkg/common", enable = false }
 
 [dependencies]
 anyhow = { version = "1.0.71", features = ["backtrace"] }
