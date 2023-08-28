@@ -13,6 +13,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-      - run: cargo test --all-features
       - run: cargo fmt --check
-      - run: cargo clippy --all-features -- --no-deps -Dwarnings
+      - run: cargo clippy --all-features -- -Dwarnings
+      - run: cargo test --all-features
